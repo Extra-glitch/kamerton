@@ -57,22 +57,33 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Установка зависимостей
+        timeout-minutes: 10
+        run: npm ci
+
+      # Готовая сборка из PyPI: установка через apt на GitHub зависала.
+      - name: FFmpeg для тестов аудио
+        timeout-minutes: 5
         run: |
-          npm ci
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          python3 -m pip install --user --break-system-packages 'imageio-ffmpeg==0.8.1'
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$(python3 -c 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())')" "$HOME/.local/bin/ffmpeg"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/ffmpeg" -hide_banner -version | head -1
 
       - name: Проверка типов и тесты
+        timeout-minutes: 10
         run: |
           npx tsc --noEmit
           npx vitest run
 
       - name: Создание Android-проекта Expo
+        timeout-minutes: 10
         run: |
           npx expo prebuild --platform android --no-install --clean
           grep -qx '    debuggableVariants = \[\]' android/app/build.gradle
 
       - name: Сборка Debug APK
+        timeout-minutes: 80
         working-directory: android
         run: >-
           ./gradlew :app:assembleDebug
@@ -100,6 +111,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Запуск на эмуляторе Android
+        timeout-minutes: 30
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
