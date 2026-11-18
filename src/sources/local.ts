@@ -3,7 +3,7 @@ import { parseLyrics } from '@/core/lrc';
 import { readLocalLyrics, searchLocal } from '@/platform/localMusic';
 
 export const local: MusicSourceAdapter = {
-  id: 'local', name: 'Файлы на телефоне', category: 'own',
+  id: 'local', name: 'На телефоне', category: 'own',
   capabilities: caps({ ...DIRECT, canOffline: true, supportsSearch: true, supportsDiscovery: true, supportsLibraryImport: true, metadata: { isrc: true, explicit: true, genres: true, audioFeatures: true } }),
   doc: {
     summary: 'Ваша музыка на телефоне: MP3, FLAC, Opus, M4A и другие форматы, которые поддерживает Android.',

@@ -223,7 +223,10 @@ def scenario():
     found = wait(FIRST, 60, exact=False)
     screenshot("03-local")
     record("Найден файл на устройстве, теги прочитаны", found)
-    tap(found)
+    wait(SECOND, 20, exact=False)
+    nodes = screen()
+    rows = [n for n in (find(nodes, FIRST), find(nodes, SECOND)) if n]
+    tap(min(rows, key=lambda n: n["y"]), "первый файл в списке")  # после него в очереди есть следующий трек
     ok, st = wait_session(is_playing)
     screenshot("04-playing")
     record("Локальный файл играет", ok, json.dumps(st, ensure_ascii=False))
