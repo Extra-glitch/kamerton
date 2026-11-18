@@ -39,3 +39,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Android-проект создаётся командой expo prebuild
+/android
+/ios
+/smoke-report
+*.apk
+__pycache__/

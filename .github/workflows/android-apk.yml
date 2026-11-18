@@ -1,0 +1,124 @@
+name: Сборка APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+    inputs:
+      abis:
+        description: Процессоры в APK. Второй вариант нужен для старых 32-битных телефонов.
+        type: choice
+        default: arm64-v8a,x86_64
+        options:
+          - arm64-v8a,x86_64
+          - arm64-v8a,armeabi-v7a,x86_64
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      ABIS: ${{ inputs.abis || 'arm64-v8a,x86_64' }}
+      APK_NAME: Kamerton-debug-${{ github.run_number }}.apk
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Получение кода
+        uses: actions/checkout@v6
+
+      - name: Освобождение места на диске
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /usr/share/swift /usr/local/share/boost
+          df -h /
+
+      - name: Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Установка зависимостей
+        run: |
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Проверка типов и тесты
+        run: |
+          npx tsc --noEmit
+          npx vitest run
+
+      - name: Создание Android-проекта Expo
+        run: |
+          npx expo prebuild --platform android --no-install --clean
+          grep -qx '    debuggableVariants = \[\]' android/app/build.gradle
+
+      - name: Сборка Debug APK
+        working-directory: android
+        run: >-
+          ./gradlew :app:assembleDebug
+          --no-daemon --stacktrace --max-workers=4
+          -PreactNativeArchitectures="$ABIS"
+          "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8"
+
+      - name: Проверка готового APK
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
+          python3 scripts/verify_apk.py "$APK_NAME" "$ABIS" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Загрузка APK в Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.APK_NAME }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Разрешение аппаратного ускорения эмулятора
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Запуск на эмуляторе Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: python3 scripts/android_smoke.py "$APK_NAME" smoke-report
+
+      - name: Итог проверки на эмуляторе
+        if: always()
+        run: |
+          if [ -f smoke-report/summary.md ]; then cat smoke-report/summary.md >> "$GITHUB_STEP_SUMMARY"; else echo 'Проверка на эмуляторе не дошла до отчёта.' >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Загрузка отчёта эмулятора
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: emulator-report-${{ github.run_number }}
+          path: smoke-report
+          if-no-files-found: warn
+          retention-days: 7
