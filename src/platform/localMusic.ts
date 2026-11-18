@@ -1,5 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker';
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { Platform } from 'react-native';
 import { readAudioTags, type AudioTags } from '@/core/audioTags';
@@ -13,12 +13,13 @@ async function tagsOf(uri: string): Promise<AudioTags | null> {
   let handle: ReturnType<File['open']> | null = null;
   try {
     const f = new File(uri);
-    handle = f.open();
+    handle = f.open(FileMode.ReadOnly); // доступ к общей папке только на чтение
     const h = handle;
     const size = f.size ?? h.size ?? 0;
     if (!size) return null;
     return await readAudioTags(async (offset, length) => { h.offset = offset; return h.readBytes(length); }, size);
-  } catch {
+  } catch (e) {
+    console.warn('Теги файла не прочитаны:', (e as Error).message);
     return null;
   } finally {
     try { handle?.close(); } catch { /* файл уже закрыт */ }

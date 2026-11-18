@@ -58,14 +58,12 @@ export function TrackRow({ t, onPress, note, index, right, testID }: { t: TrackV
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 1, alignItems: 'center' }}>
           <T v="small" c="faint" numberOfLines={1} style={{ flexShrink: 1 }}>{src ? sourceName(src.source) : 'Нет источника'}{extra > 0 ? ` и ещё ${extra}` : ''}</T>
           {mark ? <T v="small" c={mark.tone} style={mark.text === 'E' ? { fontFamily: FONT.b7 } : undefined}>{mark.text}</T> : null}
-          {blocked ? <T v="small" c="warn" numberOfLines={1}>{AVAILABILITY_LABEL[src.availability]}</T> : null}
+          {blocked ? <T v="small" c="warn" numberOfLines={1} style={{ flexShrink: 1 }}>{AVAILABILITY_LABEL[src.availability]}</T> : null}
+          {t.durationSec ? <T v="small" c="faint" style={{ marginLeft: 'auto' }}>{formatDuration(t.durationSec)}</T> : null}
         </View>
         {note ? <T v="small" c="muted" numberOfLines={2} style={{ marginTop: 1 }}>{note}</T> : null}
       </View>
-      {right ?? <>
-        {t.durationSec ? <T v="small" c="faint">{formatDuration(t.durationSec)}</T> : null}
-        <IconBtn name="more" label={`Действия: ${t.title}`} size={20} color={c.muted} onPress={() => openSheet(t)} />
-      </>}
+      {right ?? <IconBtn name="more" label={`Действия: ${t.title}`} size={20} color={c.muted} onPress={() => openSheet(t)} />}
     </Pressable>
   );
 }
