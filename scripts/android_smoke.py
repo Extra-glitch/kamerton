@@ -155,13 +155,34 @@ def alive():
     return shell(f"pidof {PACKAGE}", check=False).strip()
 
 
+def wait_storage(seconds=120):
+    """Общая память эмулятора становится доступной не сразу после загрузки."""
+    end = time.time() + seconds
+    while time.time() < end:
+        if "ok" in shell("mkdir -p /sdcard/Music && touch /sdcard/Music/kamerton-test.tmp && rm /sdcard/Music/kamerton-test.tmp && echo ok", check=False):
+            return True
+        time.sleep(3)
+    return False
+
+
+def push_file(path, name):
+    """Копирование через временную папку надёжнее прямой записи в общую память."""
+    adb("push", path, f"/data/local/tmp/{name}")
+    for _ in range(10):
+        if "ok" in shell(f"cp /data/local/tmp/{name} /sdcard/Music/{name} && echo ok", check=False):
+            return
+        time.sleep(3)
+    raise RuntimeError(f"Не удалось записать {name} в память эмулятора")
+
+
 def make_audio():
+    record("Память эмулятора готова", wait_storage())
     tmp = tempfile.mkdtemp()
     for name, title, freq in (("kamerton-1.mp3", FIRST, 330), ("kamerton-2.mp3", SECOND, 440)):
         path = f"{tmp}/{name}"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"sine=frequency={freq}:duration=150", "-c:a", "libmp3lame", "-b:a", "96k",
                         "-metadata", f"title={title}", "-metadata", "artist=Тест устройства", "-metadata", "album=Проверка", "-id3v2_version", "3", path], check=True)
-        adb("push", path, f"/sdcard/Music/{name}")
+        push_file(path, name)
     shell("content call --method scan_volume --uri content://media --arg external_primary", check=False)
     time.sleep(3)
 
