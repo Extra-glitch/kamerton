@@ -15,7 +15,7 @@ import { BOTTOM_PAD, SPACE, useColors } from '@/ui/theme';
 import { sourceName } from '@/sources/registry';
 
 type Tab = 'lists' | 'tracks' | 'liked' | 'albums' | 'artists' | 'downloads' | 'local';
-const TABS: [Tab, string][] = [['lists', 'Плейлисты'], ['liked', 'Любимое'], ['tracks', 'Все треки'], ['albums', 'Альбомы'], ['artists', 'Исполнители'], ['local', 'На телефоне'], ['downloads', 'Сохранённое']];
+const TABS: [Tab, string][] = [['lists', 'Плейлисты'], ['liked', 'Любимое'], ['local', 'На телефоне'], ['tracks', 'Все треки'], ['albums', 'Альбомы'], ['artists', 'Исполнители'], ['downloads', 'Сохранённое']];
 const SORTS: [repo.LibrarySort, string][] = [['added', 'Недавно добавленные'], ['title', 'Название'], ['artist', 'Исполнитель'], ['album', 'Альбом'], ['date', 'Дата']];
 
 export default function Library() {

@@ -124,7 +124,7 @@ def side_scroll_to(label, anchor, attempts=6):
         return None
     for _ in range(attempts):
         n = find(screen(), label)
-        if n:
+        if n and w * .08 < n["x"] < w * .82:  # элемент у края экрана виден лишь частично
             return n
         shell(f"input swipe {int(w * .8)} {row['y']} {int(w * .35)} {row['y']} 400")
         time.sleep(1)
@@ -218,8 +218,13 @@ def scenario():
 
     tap(wait("Коллекция", 20), "раздел Коллекция")
     wait("Плейлисты", 20)
-    tap(side_scroll_to("На телефоне", "Плейлисты"), "фильтр На телефоне")
-    tap(wait("Найти на телефоне", 20), "кнопка поиска файлов")
+    button = None
+    for _ in range(3):
+        tap(side_scroll_to("На телефоне", "Плейлисты"), "фильтр На телефоне")
+        button = wait("Найти на телефоне", 8)
+        if button:
+            break
+    tap(button, "кнопка поиска файлов")
     found = wait(FIRST, 60, exact=False)
     screenshot("03-local")
     record("Найден файл на устройстве, теги прочитаны", found)
