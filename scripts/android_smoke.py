@@ -5,6 +5,8 @@
 медиакнопки, отсутствие падений. Проверка сети (волна из интернета) идёт отдельно: сбой
 внешнего сервиса отмечается предупреждением и не считается ошибкой приложения.
 """
+import base64
+import glob
 import json
 import os
 import re
@@ -20,6 +22,7 @@ FIRST, SECOND = "Сигнал Камертона", "Второй сигнал"
 apk, out = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
 results = []
+seen_texts = []
 
 
 def adb(*args, check=True, timeout=120):
@@ -62,7 +65,12 @@ def screen():
         shell("uiautomator dump /sdcard/ui.xml", check=False, timeout=45)
         raw = shell("cat /sdcard/ui.xml", check=False)
         if raw.lstrip().startswith("<?xml"):
-            return parse_nodes(raw[raw.index("<?xml"):raw.rindex(">") + 1])
+            nodes = parse_nodes(raw[raw.index("<?xml"):raw.rindex(">") + 1])
+            for n in nodes:  # всплывающие сообщения исчезают быстро, поэтому запоминаем всё увиденное
+                for value in (n["text"], n["desc"]):
+                    if value and value not in seen_texts:
+                        seen_texts.append(value)
+            return nodes
         time.sleep(1.5)
     return []
 
@@ -251,6 +259,24 @@ def scenario():
     record("Волна играет из интернета", ok, json.dumps(st, ensure_ascii=False), required=False)
 
 
+def print_images():
+    """Уменьшенные снимки в журнале сборки: их можно посмотреть без скачивания отчёта."""
+    for path in sorted(glob.glob(f"{out}/*.png")):
+        small = path[:-4] + ".small.jpg"
+        r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", path, "-vf", "scale=300:-2", "-q:v", "7", small], check=False)
+        if r.returncode == 0:
+            print(f"##IMG {os.path.basename(path)} {base64.b64encode(open(small, 'rb').read()).decode()}", flush=True)
+            os.remove(small)
+
+
+def diagnostics():
+    print("--- Тексты на экранах:", json.dumps(seen_texts[-60:], ensure_ascii=False), flush=True)
+    print("--- Аудио в медиатеке:", shell("content query --uri content://media/external/audio/media --projection _display_name:title:artist", check=False)[:800], flush=True)
+    print("--- Разрешения:", " ".join(re.findall(r"android\.permission\.READ_MEDIA_AUDIO: granted=\w+", shell(f"dumpsys package {PACKAGE}", check=False))), flush=True)
+    for line in adb("logcat", "-d", "-s", "ReactNativeJS:*", check=False, timeout=60).splitlines()[-30:]:
+        print("JS>", line[:300], flush=True)
+
+
 def finish(error=None):
     crash = adb("logcat", "-d", "-b", "crash", check=False)
     full = adb("logcat", "-d", "-t", "4000", check=False, timeout=60)
@@ -261,6 +287,9 @@ def finish(error=None):
     results.append({"name": "Падений приложения нет", "ok": not has_crash, "detail": "см. crash.txt" if has_crash else "", "required": True})
     results.append({"name": "Ошибок JavaScript нет", "ok": not js, "detail": js[0][:200] if js else "", "required": True})
     screenshot("99-last")
+    if error or any(r["required"] and not r["ok"] for r in results):
+        diagnostics()
+    print_images()
     failed = [r for r in results if r["required"] and not r["ok"]]
     lines = ["## Проверка на эмуляторе Android", ""]
     for r in results:
