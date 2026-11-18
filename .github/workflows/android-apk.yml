@@ -70,6 +70,21 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/ffmpeg" -hide_banner -version | head -1
 
+      # Версия берётся из установленного React Native. Загрузка NDK иногда обрывается, поэтому есть повторы.
+      - name: Android NDK
+        timeout-minutes: 20
+        run: |
+          NDK="$(sed -n 's/^ndkVersion = "\(.*\)"/\1/p' node_modules/react-native/gradle/libs.versions.toml)"
+          test -n "$NDK"
+          for attempt in 1 2 3; do
+            rm -rf "$ANDROID_HOME/ndk/$NDK"
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK" > /dev/null || true
+            if [ -f "$ANDROID_HOME/ndk/$NDK/source.properties" ]; then echo "NDK $NDK установлен"; exit 0; fi
+            echo "Попытка $attempt не удалась"
+            sleep 20
+          done
+          exit 1
+
       - name: Проверка типов и тесты
         timeout-minutes: 10
         run: |
