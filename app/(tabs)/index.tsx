@@ -59,7 +59,7 @@ export default function Home() {
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingTop: insets.top + 8, paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }}
       refreshControl={<RefreshControl tintColor={c.accent} refreshing={q.isRefetching} onRefresh={async () => { await refreshPool(true).catch(() => undefined); await q.refetch(); }} />}>
       <Pressable testID="wave-play" accessibilityRole="button" accessibilityLabel="Включить волну" onPress={() => void launch('wave')} disabled={!!busy} style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <T v="poster" adjustsFontSizeToFit numberOfLines={1} style={{ flex: 1, marginLeft: -3 }}>{busy === 'wave' ? 'Ловим…' : 'Волна'}</T>
+        <T v="poster" adjustsFontSizeToFit numberOfLines={1} style={{ flex: 1, marginLeft: -3, marginRight: 12 }}>{busy === 'wave' ? 'Ловим…' : 'Волна'}</T>
         <View style={{ width: 66, height: 66, borderRadius: 33, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
           <Icon name={inWave ? 'pause' : 'play'} size={32} color={c.onAccent} />
         </View>

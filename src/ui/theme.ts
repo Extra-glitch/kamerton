@@ -27,7 +27,7 @@ export function useIsLight(): boolean { return useColors() === light; }
 export const FONT = { d8: 'Display-800', d6: 'Display-600', b4: 'Body-400', b5: 'Body-500', b7: 'Body-700' };
 
 export const TYPE = {
-  poster: { fontFamily: FONT.d8, fontSize: 124, lineHeight: 112 },
+  poster: { fontFamily: FONT.d8, fontSize: 112, lineHeight: 104 },
   h1: { fontFamily: FONT.d8, fontSize: 56, lineHeight: 56 },
   h2: { fontFamily: FONT.d8, fontSize: 38, lineHeight: 40 },
   h3: { fontFamily: FONT.d6, fontSize: 29, lineHeight: 32 },

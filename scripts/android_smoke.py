@@ -93,7 +93,9 @@ def wait(label, seconds=45, exact=True):
     return None
 
 
-def tap(n):
+def tap(n, label="элемент"):
+    if not n:
+        raise AssertionError(f"На экране не найден {label}")
     shell(f"input tap {n['x']} {n['y']}")
     time.sleep(0.8)
 
@@ -114,17 +116,18 @@ def scroll_to(label, attempts=6):
     return None
 
 
-def side_scroll_to(label, anchor, attempts=5):
+def side_scroll_to(label, anchor, attempts=6):
+    """Прокручивает горизонтальный ряд, высота которого определяется один раз."""
     w, _ = size()
+    row = find(screen(), anchor)
+    if not row:
+        return None
     for _ in range(attempts):
-        nodes = screen()
-        n = find(nodes, label)
+        n = find(screen(), label)
         if n:
             return n
-        a = find(nodes, anchor) or {"y": 300}
-        shell(f"input swipe {int(w * .85)} {a['y']} {int(w * .15)} {a['y']} 300")
-        time.sleep(.8)
-        anchor = anchor if find(screen(), anchor) else "Исполнители"
+        shell(f"input swipe {int(w * .8)} {row['y']} {int(w * .35)} {row['y']} 400")
+        time.sleep(1)
     return None
 
 
@@ -208,15 +211,15 @@ def scenario():
         n = find(screen(), g)
         if n:
             tap(n)
-    tap(scroll_to("Начать слушать"))
+    tap(scroll_to("Начать слушать"), "кнопка Начать слушать")
     home = wait("Включить волну", 60)
     screenshot("02-home")
     record("Открылась главная", home)
 
-    tap(wait("Коллекция", 20))
+    tap(wait("Коллекция", 20), "раздел Коллекция")
     wait("Плейлисты", 20)
-    tap(side_scroll_to("На телефоне", "Все треки"))
-    tap(wait("Найти на телефоне", 20))
+    tap(side_scroll_to("На телефоне", "Плейлисты"), "фильтр На телефоне")
+    tap(wait("Найти на телефоне", 20), "кнопка поиска файлов")
     found = wait(FIRST, 60, exact=False)
     screenshot("03-local")
     record("Найден файл на устройстве, теги прочитаны", found)

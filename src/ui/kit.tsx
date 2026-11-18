@@ -51,7 +51,7 @@ export function Btn({ label, onPress, kind = 'solid', icon, disabled, busy, styl
     <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} disabled={disabled || busy} onPress={onPress}
       style={({ pressed }) => [s.btn, kind === 'solid' && { backgroundColor: c.accent }, kind === 'line' && { borderWidth: 1.5, borderColor: c.line }, kind === 'quiet' && { paddingHorizontal: 0 }, { opacity: disabled ? 0.4 : pressed ? 0.75 : 1 }, style]}>
       {busy ? <ActivityIndicator size="small" color={fg} /> : icon ? <Icon name={icon} size={20} color={fg} /> : null}
-      <Text style={[TYPE.strong, { color: fg, fontFamily: 'Body-700' }]}>{label}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[TYPE.strong, { color: fg, fontFamily: 'Body-700', flexShrink: 1 }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -158,7 +158,7 @@ export function Field({ label, hint, style, ...rest }: TextInputProps & { label?
 export const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingBottom: 4 },
   iconBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  btn: { minHeight: 46, paddingHorizontal: 18, borderRadius: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  btn: { minHeight: 46, paddingHorizontal: 12, borderRadius: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   chip: { paddingHorizontal: 13, minHeight: 38, justifyContent: 'center', borderRadius: 19, borderWidth: 1.5 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 54, paddingVertical: 7 },

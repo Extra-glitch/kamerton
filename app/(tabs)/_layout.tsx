@@ -17,9 +17,9 @@ function TabBar({ state }: any) {
         const on = state.index === i;
         return (
           <Pressable key={r.key} testID={`tab-${r.name}`} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { if (!on) router.navigate(HREF[r.name]); }}
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            style={{ flex: LABELS[r.name].length + 3, alignItems: 'center', justifyContent: 'center' }}>
             <View style={{ position: 'absolute', top: -1, height: 3, width: 34, backgroundColor: on ? c.accent : 'transparent' }} />
-            <Text allowFontScaling={false} style={{ fontFamily: on ? FONT.d8 : FONT.d6, fontSize: 26, color: on ? c.text : c.faint }}>{LABELS[r.name]}</Text>
+            <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ fontFamily: on ? FONT.d8 : FONT.d6, fontSize: 24, color: on ? c.text : c.faint }}>{LABELS[r.name]}</Text>
           </Pressable>
         );
       })}
