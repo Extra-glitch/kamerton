@@ -310,9 +310,11 @@ def catalog_checks():
         return
     tap(tab)
     typed = type_into("Песня, исполнитель или ссылка", "Morgenshtern")
-    artist = wait("Исполнитель", 40, exact=False) if typed else None
+    artist = wait("Исполнитель", 60, exact=False) if typed else None
     screenshot("07-search-catalog")
     record("Каталог находит российских исполнителей", artist, "", required=False)
+    if not artist:
+        soft_diagnostics()
     row = wait(", фрагмент", 10, exact=False)
     if row:
         tap(row)
@@ -329,7 +331,7 @@ def catalog_checks():
         shell("input keyevent KEYCODE_BACK")
         time.sleep(1)
     if type_into("Morgenshtern", "https://soundcloud.com/forss/flickermood") or type_into("Песня, исполнитель или ссылка", "https://soundcloud.com/forss/flickermood"):
-        row = wait("Flickermood", 40, exact=False)
+        row = wait(", SoundCloud", 40, exact=False)  # подпись строки трека: «Название, Автор, SoundCloud»
         record("SoundCloud по ссылке распознаётся", row, required=False)
         if row:
             tap(row)
@@ -337,6 +339,8 @@ def catalog_checks():
             time.sleep(6)
             screenshot("09-embed")
             record("Открывается встроенный плеер SoundCloud", embed, required=False)
+            if not embed:
+                soft_diagnostics()
             shell("input keyevent KEYCODE_BACK")
 
 
@@ -348,6 +352,13 @@ def print_images():
         if r.returncode == 0:
             print(f"##IMG {os.path.basename(path)} {base64.b64encode(open(small, 'rb').read()).decode()}", flush=True)
             os.remove(small)
+
+
+def soft_diagnostics():
+    """Сведения для необязательных проверок: что было на экране и что писало приложение."""
+    print("--- Тексты на экране:", json.dumps([n["text"] or n["desc"] for n in screen() if n["text"] or n["desc"]][:50], ensure_ascii=False), flush=True)
+    for line in adb("logcat", "-d", "-s", "ReactNativeJS:*", check=False, timeout=60).splitlines()[-25:]:
+        print("JS>", line[:400], flush=True)
 
 
 def diagnostics():

@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { effectiveExplicit } from '@/core/choose';
 import { GENRES } from '@/core/genres';
@@ -83,7 +82,7 @@ export default function Search() {
 
         {!link && r.isLoading ? <Loading label="Ищем в каталоге и во всех подключённых источниках" /> : null}
         {!link && r.isError ? <Notice tone="danger" text={friendlyError(r.error)} /> : null}
-        {!link && r.data ? <Animated.View entering={FadeIn.duration(220)}>
+        {!link && r.data ? <View testID="search-results">
           {r.data.errors.length ? <Notice tone="warn" text={`Не ответили: ${r.data.errors.map((e) => `${e.source} (${e.message})`).join('; ')}`} /> : null}
 
           {top ? <Press testID="top-artist" accessibilityRole="link" onPress={() => openArtist(top.name, top.source, top.id)} style={{ marginTop: 6 }}>
@@ -134,7 +133,7 @@ export default function Search() {
             </Section>
             <T v="small" c="faint" style={{ marginTop: 18 }}>Искали: {r.data.searched.join(', ')}. Данные каталога: Deezer.</T>
           </>}
-        </Animated.View> : null}
+        </View> : null}
       </ScrollView>
     </View>
   );

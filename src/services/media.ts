@@ -36,7 +36,10 @@ export async function federatedSearch(q: string, opts: { sources?: string[]; lim
   let list = (await searchable()).filter((a) => a.id !== 'itunes');
   if (opts.sources?.length) list = list.filter((a) => opts.sources!.includes(a.id));
   const out: FederatedResult = { tracks: [], albums: [], artists: [], playlists: [], topArtist: null, loose: [], errors: [], searched: list.map((a) => a.name) };
-  const results = await Promise.allSettled(list.map((a) => a.search!(ctx, q, opts.limit ?? (CATALOG_SOURCES.has(a.id) ? 40 : 20))));
+  const started = Date.now();
+  const timed = (a: MusicSourceAdapter) => a.search!(ctx, q, opts.limit ?? (CATALOG_SOURCES.has(a.id) ? 40 : 20)).finally(() => { times[a.id] = Date.now() - started; });
+  const times: Record<string, number> = {};
+  const results = await Promise.allSettled(list.map(timed));
   const pairs = results.map((r, i) => ({ r, a: list[i] }));
   // Запасной каталог Apple подключается, только если Deezer не ответил или нашёл слишком мало.
   const deezerHit = pairs.find((p) => p.a.id === 'deezer');
@@ -81,6 +84,8 @@ export async function federatedSearch(q: string, opts: { sources?: string[]; lim
   out.loose = (await repo.getViews(looseIds)).filter((t) => !shown.has(t.id));
   out.artists = [...artistMap.values()].sort((a, b) => similarity(q, b.name) - similarity(q, a.name) || (b.followers ?? 0) - (a.followers ?? 0));
   out.topArtist = out.artists.find((a) => isArtistMatch(q, a.name)) ?? null;
+  // Короткая сводка в журнал: помогает понять, какой источник тормозит или не отвечает.
+  console.log(`Поиск «${q}»: треков ${out.tracks.length}, случайных ${out.loose.length}, мс ${JSON.stringify(times)}${out.errors.length ? `, ошибки ${JSON.stringify(out.errors)}` : ''}`);
   return out;
 }
 
