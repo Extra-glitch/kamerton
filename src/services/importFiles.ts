@@ -13,6 +13,7 @@ import { parseTitle } from '@/core/versions';
 import * as repo from '@/db/repo';
 import { importAudioFiles, scanNewFiles, type ImportedFile, type ImportResult, type IncomingFile } from '@/platform/localMusic';
 import { sourceContext as ctx } from '@/platform/secureConfig';
+import { queryVariants } from '@/search/variants';
 import { adapter, isDisabled } from '@/sources/registry';
 
 /** Обложка той же песни из каталога. Только при уверенном совпадении названия и исполнителя. */
@@ -74,7 +75,9 @@ export interface Candidate { track: RemoteTrack; durationMatch: boolean }
 /** Варианты из каталогов (Deezer, Apple), совпадающие по длительности — первыми. */
 export async function identifyCandidates(q: string, durationSec?: number): Promise<Candidate[]> {
   const sources = ['deezer', 'itunes'].map((id) => adapter(id)).filter((a) => !!a?.search);
-  const lists = await Promise.all(sources.map((a) => a!.search!(ctx, q, 15).then((r) => r.tracks).catch(() => [] as RemoteTrack[])));
+  // «Zemfira Iskala» ищется и как «земфира искала»: на телефоне часто включена английская раскладка.
+  const variants = queryVariants(q).slice(0, 2);
+  const lists = await Promise.all(sources.flatMap((a) => variants.map((v) => a!.search!(ctx, v, 15).then((r) => r.tracks).catch(() => [] as RemoteTrack[]))));
   const seen = new Set<string>();
   const out: Candidate[] = [];
   for (const t of lists.flat()) {

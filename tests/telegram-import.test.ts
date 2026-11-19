@@ -89,3 +89,18 @@ describe('волна берёт интернет-источники', () => {
     expect(wavePool(pool, false).map((t: any) => t.id)).toEqual(['d']);
   });
 });
+
+describe('поиск песни для файла без названия', () => {
+  it('латиница ищется и кириллицей, совпадение по длительности — первым', async () => {
+    const { identifyCandidates } = await import('@/services/importFiles');
+    const { mockFetch } = await import('./helpers');
+    const calls = mockFetch([
+      [/api\.deezer\.com\/search\?.*q=%D0%B7/i, { data: [{ id: 2, title: 'Искала', duration: 201, artist: { id: 1, name: 'Земфира' }, album: { id: 3, title: 'Вендетта', cover_xl: 'https://c/x.jpg' } }] }],
+      [/api\.deezer\.com\/search/, { data: [{ id: 1, title: 'Iskala (Live)', duration: 260, artist: { id: 1, name: 'Zemfira' }, album: { id: 4, title: 'Live' } }] }],
+      [/itunes\.apple\.com/, { results: [] }],
+    ]);
+    const r = await identifyCandidates('Zemfira Iskala', 200);
+    expect(calls.some((u) => /q=%D0%B7%D0%B5%D0%BC/i.test(u))).toBe(true);
+    expect(r[0]).toMatchObject({ durationMatch: true, track: { title: 'Искала', artist: 'Земфира' } });
+  });
+});
