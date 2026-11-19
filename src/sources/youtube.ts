@@ -1,27 +1,42 @@
-// YouTube используется только для клипов в видимом плеере.
+// YouTube: поиск песен и клипов через YouTube Data API и прослушивание во встроенном плеере.
 // Звук нельзя отделять от видео, продолжать в фоне и закрывать плеер другими элементами.
 
 import type { MusicVideo, RemoteTrack } from '@/core/types';
 import { HttpError, httpJson, query } from '@/net/http';
-import { caps, type MusicSourceAdapter, type SourceContext } from './types';
+import { caps, emptySearch, type MusicSourceAdapter, type SourceContext } from './types';
 
 export const youtube: MusicSourceAdapter = {
   id: 'youtube', name: 'YouTube', category: 'commercial',
-  capabilities: caps({ playback: 'visible-embed', requiresVisiblePlayer: true, auth: 'apiKey', supportsDeepLink: true }),
-  configFields: [{ key: 'apiKey', label: 'Ключ YouTube Data API', secret: true, hint: 'Необязательно: нужен только для автоматического поиска клипов. Видео по ссылке работают и без него.' }],
+  capabilities: caps({ playback: 'visible-embed', requiresVisiblePlayer: true, auth: 'apiKey', supportsDeepLink: true, supportsSearch: true }),
+  configFields: [{ key: 'apiKey', label: 'Ключ YouTube Data API', secret: true, required: true, hint: 'Бесплатный ключ из Google Cloud. С ним YouTube ищет песни и играет их в приложении.' }],
   doc: {
-    summary: 'Видео и клипы по ссылке в официальном плеере YouTube внутри приложения.',
+    summary: 'Поиск песен и клипов на YouTube и прослушивание целиком во встроенном плеере YouTube.',
     limits: [
       'В России YouTube заблокирован: без VPN плеер не загрузится. VPN в приложение не встроен.',
       'Видео играет со своим звуком, плеер Камертона на это время ставится на паузу.',
       'По правилам YouTube плеер должен быть виден: при сворачивании видео останавливается, фона и экрана блокировки нет.',
       'Скачивать видео и звук с YouTube правила запрещают, поэтому сохранения на телефон нет.',
+      'Бесплатный ключ даёт около 100 поисков в сутки. Повторные поиски берутся из памяти и квоту не тратят.',
     ],
     unconfirmed: ['Работа встроенного плеера на телефоне не проверена.'],
-    setup: ['В приложении YouTube нажмите «Поделиться → Копировать ссылку».', 'Вставьте ссылку в поиск Камертона.', 'Для автопоиска клипов можно добавить ключ YouTube Data API из Google Cloud Console.'],
+    setup: [
+      'Откройте console.cloud.google.com и войдите в аккаунт Google (нужен VPN).',
+      'Создайте проект: вверху «Select a project» → «New project» → любое имя → «Create».',
+      'Откройте «APIs & Services» → «Library», найдите «YouTube Data API v3» и нажмите «Enable».',
+      'Откройте «APIs & Services» → «Credentials» → «Create credentials» → «API key».',
+      'В настройках ключа в «API restrictions» выберите «Restrict key» и отметьте только YouTube Data API v3.',
+      'Скопируйте ключ и вставьте его сюда. Ключ хранится только на телефоне в защищённом хранилище.',
+    ],
     docsUrl: 'https://developers.google.com/youtube/iframe_api_reference',
   },
-  status: async (ctx) => ({ state: 'ready', detail: (await ctx.getConfig('youtube')).apiKey ? 'По ссылке и автопоиск клипов, в России нужен VPN' : 'По ссылке, в России нужен VPN' }),
+  status: async (ctx) => ((await ctx.getConfig('youtube')).apiKey ? { state: 'ready', detail: 'Поиск и прослушивание, в России нужен VPN' } : { state: 'needs_setup', detail: 'Нужен бесплатный ключ YouTube' }),
+  async search(ctx, q, limit, page = 0) {
+    const out = emptySearch();
+    const r = await searchYouTube(ctx, q, Math.min(limit, 25), page);
+    out.tracks = r.tracks;
+    out.hasMore = r.hasMore;
+    return out;
+  },
   canHandleLink: (url) => !!parseYouTubeId(url) && /youtu/i.test(url),
   async resolveLink(_ctx, url) {
     const id = parseYouTubeId(url);
@@ -45,6 +60,56 @@ export function mapYouTubeOembed(id: string, o: any): RemoteTrack {
     coverUrl: o.thumbnail_url, availability: 'full', externalUrl: `https://www.youtube.com/watch?v=${id}`, canOffline: false,
     attribution: 'Плеер YouTube', extra: { embed: { provider: 'youtube', id } },
   };
+}
+
+const decode = (s: string) => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+/** PT3M5S → 185 секунд. */
+export function isoDuration(v?: string): number | undefined {
+  const m = v?.match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return undefined;
+  const [, d, h, mi, s] = m.map((x) => Number(x ?? 0));
+  return d * 86400 + h * 3600 + mi * 60 + s || undefined;
+}
+
+/** Видео из поиска YouTube как трек. Каналы «Исполнитель - Topic» содержат саму песню. */
+export function mapYouTubeVideo(item: any, details?: any): RemoteTrack {
+  const id = typeof item.id === 'string' ? item.id : item.id?.videoId;
+  const sn = item.snippet ?? {};
+  const t = mapYouTubeOembed(id, { title: decode(String(sn.title ?? '')), author_name: decode(String(sn.channelTitle ?? '')), thumbnail_url: sn.thumbnails?.high?.url ?? sn.thumbnails?.medium?.url });
+  const topic = /\s-\sTopic$/i.test(String(sn.channelTitle ?? ''));
+  if (topic) { t.artist = decode(String(sn.channelTitle)).replace(/\s-\sTopic$/i, '').trim(); t.title = decode(String(sn.title)); }
+  const blocked: string[] = details?.contentDetails?.regionRestriction?.blocked ?? [];
+  const allowed: string[] | undefined = details?.contentDetails?.regionRestriction?.allowed;
+  return {
+    ...t,
+    durationSec: isoDuration(details?.contentDetails?.duration),
+    availability: blocked.includes('RU') || (allowed && !allowed.includes('RU')) ? 'region_blocked' : 'full',
+    year: sn.publishedAt ? Number(String(sn.publishedAt).slice(0, 4)) : undefined,
+    extra: { ...t.extra, topic, channel: decode(String(sn.channelTitle ?? '')) },
+  };
+}
+
+const pageTokens = new Map<string, string>();
+
+export async function searchYouTube(ctx: SourceContext, q: string, limit: number, page = 0): Promise<{ tracks: RemoteTrack[]; hasMore: boolean }> {
+  const key = (await ctx.getConfig('youtube')).apiKey;
+  if (!key) throw new HttpError('auth', 'YouTube: нужен ключ. Добавьте его в «Источники музыки».');
+  const pageToken = page ? pageTokens.get(`${q}|${page}`) : undefined;
+  if (page && !pageToken) return { tracks: [], hasMore: false };
+  const r = await httpJson<any>(`https://www.googleapis.com/youtube/v3/search?${query({ part: 'snippet', type: 'video', videoCategoryId: 10, videoEmbeddable: 'true', maxResults: limit, q, regionCode: 'RU', relevanceLanguage: 'ru', pageToken, key })}`, { service: 'YouTube', retries: 0, timeoutMs: 9000 });
+  if (r.nextPageToken) pageTokens.set(`${q}|${page + 1}`, r.nextPageToken);
+  const items: any[] = (r.items ?? []).filter((x: any) => x.id?.videoId);
+  // Длительность и ограничения по региону приходят отдельным запросом (1 единица квоты).
+  const details = new Map<string, any>();
+  if (items.length) {
+    try {
+      const d = await httpJson<any>(`https://www.googleapis.com/youtube/v3/videos?${query({ part: 'contentDetails,status', id: items.map((x) => x.id.videoId).join(','), key })}`, { service: 'YouTube', retries: 0, timeoutMs: 8000 });
+      for (const v of d.items ?? []) details.set(v.id, v);
+    } catch { /* без длительности поиск всё равно полезен */ }
+  }
+  const tracks = items.map((x) => mapYouTubeVideo(x, details.get(x.id.videoId))).filter((t) => details.get(t.sourceTrackId)?.status?.embeddable !== false);
+  return { tracks, hasMore: !!r.nextPageToken };
 }
 
 export function parseYouTubeId(input: string): string | null {

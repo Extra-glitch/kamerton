@@ -6,11 +6,12 @@ import * as repo from '@/db/repo';
 import { buildPortrait } from '@/reco/extras';
 import { loadReco } from '@/services/reco';
 import { useUi } from '@/state/app';
-import { Row, T } from '@/ui/kit';
+import { Row, T, useBottomPad } from '@/ui/kit';
 import { Ambient } from '@/ui/ambient';
-import { BOTTOM_PAD, SPACE, useColors } from '@/ui/theme';
+import { SPACE, useColors } from '@/ui/theme';
 
 export default function Profile() {
+  const bottomPad = useBottomPad();
   const c = useColors();
   const insets = useSafeAreaInsets();
   const version = useUi((u) => u.dataVersion + u.playVersion);
@@ -19,7 +20,7 @@ export default function Profile() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
     <Ambient strength={0.75} />
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14, paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }}>
+    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14, paddingHorizontal: SPACE.page, paddingBottom: bottomPad }}>
       <T v="h1" accessibilityRole="header">Профиль</T>
       <View style={{ flexDirection: 'row', gap: 26, marginVertical: 18 }}>
         <View><T v="h1">{p ? Math.round(p.hours) : 0}</T><T v="small" c="muted">часов музыки</T></View>
@@ -29,6 +30,7 @@ export default function Profile() {
       <Row icon="similar" testID="open-portrait" title="Музыкальный портрет" sub="Жанры, эпохи, исполнители и статистика" onPress={() => router.push('/portrait')} />
       <Row icon="heart" title="Общие лайки" sub="Сравните вкус с другом без регистрации" onPress={() => router.push('/shared')} />
       <Row icon="radio" testID="open-sources" title="Источники музыки" sub="Подключения, ключи и честные ограничения" onPress={() => router.push('/sources')} />
+      <Row icon="search" testID="open-diagnostics" title="Диагностика источников" sub="Кто ответил на поиск, сколько нашёл и почему песни нет" onPress={() => router.push('/diagnostics')} />
       <Row icon="plus" title="Импорт музыки" sub="Плейлисты текстом, файлом и ссылкой" onPress={() => router.push('/import')} />
       <Row icon="fork" title="Настройка вкуса" sub="Жанры, исполнители и степень открытий" onPress={() => router.push('/onboarding')} />
       <Row icon="timer" title="Новые релизы" sub="Любимые исполнители за последние месяцы" onPress={() => router.push('/releases')} />

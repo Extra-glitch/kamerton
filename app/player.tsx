@@ -24,7 +24,9 @@ import { Ambient, useMotion } from '@/ui/ambient';
 import { Glass } from '@/ui/glass';
 import { Badge, Btn, Chip, Cover, Field, IconBtn, Notice, Press, RoundBtn, T } from '@/ui/kit';
 import { Dial, PlayOrb, qualityText } from '@/ui/music';
-import { useColors } from '@/ui/theme';
+import { SONG_TITLE, useColors } from '@/ui/theme';
+import { stopVideo, useVideo, videoJump, videoNext, videoPrev, videoSeek, videoToggle } from '@/player/video';
+import { VIDEO_TOP } from '@/ui/video';
 
 const CONTEXT: [string, string][] = [['preview', 'Фрагменты'], ['wave', 'Волна'], ['surprise', 'Удиви меня'], ['radio:', 'Радио по песне'], ['daily', 'Открытия дня'], ['dj', 'Умный DJ'], ['search', 'Поиск'], ['library', 'Коллекция'], ['playlist', 'Плейлист'], ['radio-station', 'Интернет-радио']];
 const SLEEP = [15, 30, 60];
@@ -33,7 +35,7 @@ function youtubeHtml(id: string) {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="strict-origin-when-cross-origin"><style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%}</style></head><body><iframe src="https://www.youtube-nocookie.com/embed/${id}?playsinline=1&rel=0" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>`;
 }
 
-export default function Player() {
+function AudioPlayer() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -109,7 +111,7 @@ export default function Player() {
             </GestureDetector>
           ) : (
             <View style={{ width: coverW, alignSelf: 'center', marginTop: 6 }}>
-              {video.data && active && Platform.OS !== 'web' ? <View style={{ width: coverW, height: coverW * 9 / 16, backgroundColor: '#000' }}><WebView source={{ html: youtubeHtml(video.data.videoId), baseUrl: 'https://kamerton.app' }} allowsFullscreenVideo mediaPlaybackRequiresUserAction /></View> : null}
+              {video.data && active && Platform.OS !== 'web' ? <View style={{ width: coverW, height: coverW * 9 / 16, backgroundColor: '#000' }}><WebView source={{ html: youtubeHtml(video.data.videoId), baseUrl: 'https://app.kamerton.player' }} allowsFullscreenVideo mediaPlaybackRequiresUserAction /></View> : null}
               {video.data ? <T v="small" c="muted" style={{ marginTop: 6 }}>Клип найден через {video.data.origin}. Играет со своим звуком в плеере YouTube.</T> : null}
               {video.isLoading ? <T c="muted">Ищем официальный клип…</T> : null}
               {!video.isLoading && !video.data ? <View style={{ paddingVertical: 12 }}>
@@ -122,7 +124,7 @@ export default function Player() {
           )}
 
           <Pressable onPress={() => router.push({ pathname: '/artist/[name]', params: { name: t.artist, ...(src?.source === 'deezer' && src.artistId ? { deezer: src.artistId } : {}) } })} accessibilityRole="link" style={{ marginTop: 22 }}>
-            <T v="h1" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{t.title}</T>
+            <T numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={SONG_TITLE}>{t.title}</T>
             <T v="title" c="muted" numberOfLines={1} style={{ marginTop: 4 }}>{t.artist}{t.album ? `, ${t.album}` : ''}</T>
           </Pressable>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 8 }}>
@@ -192,3 +194,69 @@ export default function Player() {
 
 function skipNext() { void player.next(); }
 function skipPrev() { void player.previous(); }
+
+/** Экран плеера во время видео YouTube. Само видео рисует VideoHost в корне приложения, здесь под него оставлено место. */
+function VideoPlayer() {
+  const c = useColors();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const t = useVideo((v) => v.queue[v.index]);
+  const queue = useVideo((v) => v.queue);
+  const index = useVideo((v) => v.index);
+  const playing = useVideo((v) => v.playing);
+  const buffering = useVideo((v) => v.buffering);
+  const pos = useVideo((v) => v.positionSec);
+  const dur = useVideo((v) => v.durationSec);
+  const error = useVideo((v) => v.error);
+  const [seekShown, setSeekShown] = useState<number | null>(null);
+  if (!t) return null;
+  const h = Math.round((width - 32) * 9 / 16);
+  const shownPos = seekShown ?? pos;
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <Ambient />
+      <View style={{ position: 'absolute', top: insets.top + 8, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <RoundBtn testID="player-close" name="down" label="Свернуть плеер" onPress={() => router.back()} />
+        <T v="strong" c="muted" style={{ flex: 1, textAlign: 'center' }} numberOfLines={1}>YouTube</T>
+        <RoundBtn name="more" label="Действия с треком" onPress={() => openSheet(t)} />
+      </View>
+      <ScrollView style={{ marginTop: insets.top + VIDEO_TOP + h + 8 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
+        <Pressable onPress={() => router.push({ pathname: '/artist/[name]', params: { name: t.artist } })} accessibilityRole="link" style={{ marginTop: 10 }}>
+          <T numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={SONG_TITLE}>{t.title}</T>
+          <T v="title" c="muted" numberOfLines={1} style={{ marginTop: 4 }}>{t.artist}</T>
+        </Pressable>
+        {error ? <Notice tone="danger" text={error} /> : null}
+        <View style={{ marginTop: 14 }}>
+          <Dial testID="seek" label="Позиция в видео" value={dur ? shownPos / dur : 0} onChange={(v) => setSeekShown(v * dur)} onCommit={(v) => { setSeekShown(null); videoSeek(v * dur); }} disabled={!dur} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><T v="small" c="muted">{formatDuration(shownPos)}</T><T v="small" c="muted">{buffering ? 'Загружается…' : formatDuration(dur)}</T></View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', marginTop: 8 }}>
+          <IconBtn name="prev" label="Предыдущее" size={34} onPress={videoPrev} />
+          <PlayOrb testID="player-toggle" label={playing ? 'Пауза' : 'Играть'} playing={playing} size={74} onPress={videoToggle} />
+          <IconBtn testID="player-next" name="next" label="Следующее" size={34} onPress={videoNext} />
+        </View>
+        <Glass radius={24} style={{ flexDirection: 'row', justifyContent: 'space-around', marginTop: 14, paddingHorizontal: 4 }}>
+          <IconBtn testID="player-like" name={t.liked ? 'heartOn' : 'heart'} label={t.liked ? 'Убрать из любимого' : 'В любимое'} active={t.liked} onPress={async () => { await applyFeedback(t.id, 'like', !t.liked); bumpData(); const v = (await repo.getViews([t.id]))[0]; if (v) useVideo.setState((st) => ({ queue: st.queue.map((x) => (x.id === v.id ? v : x)) })); }} />
+          <IconBtn name="plus" label="Добавить в плейлист" onPress={() => openSheet(t)} />
+          <IconBtn name="similar" label="Похожие композиции" onPress={() => router.push({ pathname: '/similar/[id]', params: { id: t.id } })} />
+          <IconBtn name="close" label="Остановить видео" onPress={() => { stopVideo(); router.back(); }} />
+        </Glass>
+        <T v="small" c="faint" style={{ marginTop: 10 }}>По правилам YouTube видео играет, только пока оно на экране.</T>
+        {queue.length > index + 1 ? <View style={{ marginTop: 18 }}>
+          <T v="h3" style={{ marginBottom: 6 }}>Дальше</T>
+          {queue.slice(index + 1, index + 11).map((x, i) => (
+            <Pressable key={x.id} accessibilityRole="button" onPress={() => videoJump(index + 1 + i)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
+              <Cover uri={x.coverUrl} title={x.artist} size={44} radius={10} />
+              <View style={{ flex: 1 }}><T v="title" numberOfLines={1}>{x.title}</T><T v="small" c="muted" numberOfLines={1}>{x.artist}</T></View>
+            </Pressable>
+          ))}
+        </View> : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+export default function Player() {
+  const video = useVideo((v) => v.active);
+  return video ? <VideoPlayer /> : <AudioPlayer />;
+}

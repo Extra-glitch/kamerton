@@ -13,6 +13,7 @@ import { friendlyError, httpJson, query } from '@/net/http';
 import { sourceContext as ctx } from '@/platform/secureConfig';
 import { ADAPTERS, adapter, CATALOG_SOURCES, DIRECT_SOURCES, isPlayableHere, playMode, readySources } from '@/sources/registry';
 import type { AlbumRef, ArtistRef, MusicSourceAdapter, PlaylistRef, QualityPreference } from '@/sources/types';
+import { cachedSearch } from '@/search/engine';
 import { deezerArtist } from '@/sources/deezer';
 import { findVideo } from '@/sources/youtube';
 import { settings } from '@/state/settings';
@@ -104,11 +105,11 @@ export async function searchLink(url: string): Promise<{ title: string; tracks: 
   return { title: r.title, tracks: await repo.getViews(await upsertFrom(a, r.tracks, { pool: true })), source: a.id };
 }
 
-export interface ArtistPage { ref: ArtistRef | null; top: TrackView[]; albums: AlbumRef[]; free: TrackView[]; errors: string[] }
+export interface ArtistPage { ref: ArtistRef | null; top: TrackView[]; albums: AlbumRef[]; free: TrackView[]; videos: TrackView[]; errors: string[] }
 
 /** Страница исполнителя: популярное и альбомы из каталога, плюс то, что играет целиком. */
 export async function artistPage(name: string, deezerId?: string): Promise<ArtistPage> {
-  const out: ArtistPage = { ref: null, top: [], albums: [], free: [], errors: [] };
+  const out: ArtistPage = { ref: null, top: [], albums: [], free: [], videos: [], errors: [] };
   const dz = adapter('deezer');
   if (dz && (await dz.status(ctx)).state === 'ready') {
     try {
@@ -138,6 +139,15 @@ export async function artistPage(name: string, deezerId?: string): Promise<Artis
   }
   const topIds = new Set(out.top.map((t) => t.id));
   out.free = (await repo.getViews(ids)).filter((t) => !topIds.has(t.id) && t.preferred && isPlayableHere(t.preferred));
+  // Целиком на YouTube: песни и клипы этого исполнителя.
+  const yt = adapter('youtube');
+  if (yt && (await yt.status(ctx)).state === 'ready') {
+    try {
+      const r = await cachedSearch(yt, primaryArtist(out.ref?.name ?? name), 20, 0);
+      const mine = r.tracks.filter((t) => similarity(primaryArtist(t.artist), primaryArtist(out.ref?.name ?? name)) >= 0.88);
+      out.videos = await repo.getViews(await upsertFrom(yt, mine));
+    } catch (e) { out.errors.push(`YouTube: ${friendlyError(e)}`); }
+  }
   return out;
 }
 
@@ -172,6 +182,9 @@ async function currentQuality(): Promise<QualityPreference> {
   } catch { return s.qualityCell; }
 }
 
+/** Источники, сыгранные фрагментом: такие прослушивания не пишутся в историю. */
+export const previewIds = new Set<string>();
+
 export async function resolveStream(s: SourceTrack) {
   if (s.localPath) return { uri: s.localPath, quality: s.quality };
   const dl = await repo.getDownload(s.id);
@@ -180,6 +193,7 @@ export async function resolveStream(s: SourceTrack) {
   if (!a?.resolveStream) throw new Error(`${a?.name ?? s.source} нельзя воспроизвести внутри приложения.`);
   const mode = playMode(s);
   if (mode !== 'player' && mode !== 'preview') throw new Error('Полная версия недоступна.');
+  if (mode === 'preview') previewIds.add(s.id);
   return a.resolveStream(ctx, s, await currentQuality());
 }
 

@@ -28,21 +28,25 @@ export function mapItunesTrack(t: any): RemoteTrack {
     durationSec: t.trackTimeMillis ? t.trackTimeMillis / 1000 : undefined, explicit: itunesExplicit(t.trackExplicitness),
     tags: t.primaryGenreName ? [String(t.primaryGenreName)] : [], year: t.releaseDate ? Number(String(t.releaseDate).slice(0, 4)) : undefined,
     releaseDate: t.releaseDate ? String(t.releaseDate).slice(0, 10) : undefined, coverUrl: big(t.artworkUrl100),
-    availability: 'external_only', attribution: 'Данные: Apple', externalUrl: t.trackViewUrl, canOffline: false,
+    availability: 'subscription_required', attribution: 'Каталог Apple Music', externalUrl: t.trackViewUrl, canOffline: false,
   };
 }
 
 export const itunes: MusicSourceAdapter = {
-  id: 'itunes', name: 'Apple (каталог)', category: 'commercial',
+  id: 'itunes', name: 'Apple Music', category: 'commercial',
   capabilities: caps({ playback: 'none', supportsSearch: true, supportsDeepLink: true, attributionRequired: true, mlAllowed: false, metadata: { explicit: true, genres: true } }),
   doc: {
-    summary: 'Запасной каталог для поиска российских исполнителей: названия, альбомы, обложки, пометка Explicit и ссылка на страницу в Apple.',
-    limits: ['Ничего не проигрывает: фрагменты Apple разрешены только для продвижения покупок.', 'Около 20 запросов в минуту, поэтому подключается, только если Deezer не ответил или нашёл мало.'],
+    summary: 'Каталог Apple Music (российская витрина): названия, альбомы, обложки, пометка Explicit. Песня открывается в приложении Apple Music и играет там по подписке.',
+    limits: [
+      'Внутри Камертона Apple Music пока не играет: для этого нужна библиотека MusicKit для Android и платный аккаунт разработчика Apple (99 долларов в год). Код для неё не подключён.',
+      'Подписка Apple Music в России работает, но оплатить её российской картой нельзя.',
+      'Около 20 запросов в минуту: поиск Apple кэшируется.',
+    ],
     unconfirmed: ['Доступность из России без VPN не проверена.'],
     setup: ['Ничего настраивать не нужно.'],
     docsUrl: 'https://performance-partners.apple.com/search-api',
   },
-  status: async () => ({ state: 'ready', detail: 'Запасной каталог для поиска' }),
+  status: async () => ({ state: 'ready', detail: 'Поиск по каталогу, слушать в приложении Apple Music' }),
   externalUrl: (v) => v.externalUrl ?? null,
   async search(_ctx, q, limit) {
     const out = emptySearch();

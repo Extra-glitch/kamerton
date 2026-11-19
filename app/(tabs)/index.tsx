@@ -10,9 +10,9 @@ import { player, toast, useUi, usePlayer } from '@/state/app';
 import { useSettings } from '@/state/settings';
 import { Ambient } from '@/ui/ambient';
 import { Glass } from '@/ui/glass';
-import { Btn, Cover, Empty, Loading, Notice, Press, Section, Shelf, T } from '@/ui/kit';
+import { Btn, Cover, Empty, Loading, Notice, Press, Section, Shelf, T, useBottomPad } from '@/ui/kit';
 import { Dial, playBadge, playOrOpen, PlayOrb, TrackList } from '@/ui/music';
-import { BOTTOM_PAD, SPACE } from '@/ui/theme';
+import { SPACE } from '@/ui/theme';
 
 function Poster({ t, tracks, i, context, size = 150 }: { t: TrackView; tracks: TrackView[]; i: number; context: string; size?: number }) {
   const b = playBadge(t.preferred);
@@ -28,6 +28,7 @@ function Poster({ t, tracks, i, context, size = 150 }: { t: TrackView; tracks: T
 const MODES = [{ at: 0.1, label: 'Больше знакомого' }, { at: 0.5, label: 'Баланс' }, { at: 0.9, label: 'Больше открытий' }];
 
 export default function Home() {
+  const bottomPad = useBottomPad();
   const insets = useSafeAreaInsets();
   const onboarded = useSettings((s) => s.onboarded);
   const discovery = useSettings((s) => s.discovery);
@@ -61,7 +62,7 @@ export default function Home() {
   return (
     <View style={{ flex: 1 }}>
       <Ambient animate />
-      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }}
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 12, paddingHorizontal: SPACE.page, paddingBottom: bottomPad }}
         refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={async () => { await refreshPool(true).catch(() => undefined); await q.refetch(); }} />}>
         <Glass radius={30} style={{ padding: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>

@@ -56,6 +56,14 @@ export const spotify: MusicSourceAdapter = {
     return { state: 'ready', detail: 'Импорт и переход в приложение Spotify' };
   },
   verify: async (ctx) => { const me = await get(ctx, '/me'); return `Вход выполнен: ${me.display_name ?? me.id}.`; },
+  async search(ctx, q, limit, page = 0) {
+    const r = await get(ctx, `/search?${query({ q, type: 'track,artist', limit: Math.min(limit, 50), offset: page * Math.min(limit, 50) })}`);
+    return {
+      tracks: (r.tracks?.items ?? []).map(mapSpotifyTrack).filter((t: RemoteTrack | null): t is RemoteTrack => !!t),
+      artists: (r.artists?.items ?? []).slice(0, 4).map((a: any) => ({ source: 'spotify', id: a.id, name: a.name, imageUrl: a.images?.[0]?.url, followers: a.followers?.total })),
+      albums: [], playlists: [], hasMore: !!r.tracks?.next,
+    };
+  },
   canHandleLink: (url) => /open\.spotify\.com\/playlist\//i.test(url),
   externalUrl: (v) => v.externalUrl ?? `https://open.spotify.com/search/${encodeURIComponent(`${v.artist} ${v.title}`)}`,
 

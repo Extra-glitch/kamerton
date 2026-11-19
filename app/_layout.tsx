@@ -14,6 +14,7 @@ import { BlurTargetContext } from '@/ui/glass';
 import { Btn, T } from '@/ui/kit';
 import { Dock, OfflineBanner, Toast, TrackSheet } from '@/ui/music';
 import { useColors } from '@/ui/theme';
+import { VideoHost } from '@/ui/video';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 60_000, refetchOnWindowFocus: false } } });
@@ -61,6 +62,7 @@ export default function RootLayout() {
                 </Stack>
               </BlurTargetView>
               <Dock />
+              <VideoHost />
               <OfflineBanner />
               <TrackSheet />
               <Toast />

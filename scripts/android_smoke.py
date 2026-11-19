@@ -362,6 +362,17 @@ def catalog_checks():
             if not embed:
                 soft_diagnostics()
             shell("input keyevent KEYCODE_BACK")
+    time.sleep(1.5)
+    profile = wait("Профиль", 20)
+    if profile:
+        tap(profile)
+        diag = scroll_to("Диагностика источников")
+        if diag:
+            tap(diag)
+            ok = wait("Подключение", 20)
+            time.sleep(1)
+            screenshot("10-diagnostics")
+            record("Открывается диагностика источников", ok, required=False)
 
 
 def print_images():

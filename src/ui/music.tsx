@@ -6,7 +6,7 @@ import { useNetworkState } from 'expo-network';
 import { router, usePathname } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Linking, Pressable, ScrollView, Share, StyleSheet, Text, useWindowDimensions, View, type GestureResponderEvent } from 'react-native';
-import Animated, { cancelAnimation, Easing, FadeIn, FadeInDown, FadeOut, FadeOutDown, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 import { AVAILABILITY_LABEL, effectiveExplicit } from '@/core/choose';
@@ -19,7 +19,9 @@ import { applyFeedback } from '@/services/reco';
 import { resolveStream } from '@/services/media';
 import { bumpData, closeSheet, openSheet, player, playTracks, toast, useUi, usePlayer } from '@/state/app';
 import { downloadToApp } from '@/platform/localMusic';
+import { playVideos, useVideo } from '@/player/video';
 import { useMotion } from './ambient';
+import { VideoMini } from './video';
 import { Glass } from './glass';
 import { Icon, type IconName } from './icons';
 import { Badge, Cover, IconBtn, Press, T } from './kit';
@@ -46,32 +48,16 @@ export function versionMark(s: SourceTrack): { text: string; tone: 'muted' | 'wa
   return { text: 'версия?', tone: 'faint' };
 }
 
-/** Как трек играет в Камертоне: короткая подпись для строки списка. */
-export function playBadge(s: SourceTrack | null): { label: string; tone: 'ok' | 'warn' | 'muted' | 'faint' } {
-  if (!s) return { label: 'нет источника', tone: 'faint' };
-  const m = playMode(s);
-  if (m === 'player') return s.localPath ? { label: 'на телефоне', tone: 'ok' } : { label: 'целиком', tone: 'ok' };
-  if (m === 'preview') return { label: 'фрагмент', tone: 'warn' };
-  if (m === 'embed') return { label: sourceName(s.source), tone: 'muted' };
-  return { label: s.availability === 'region_blocked' ? 'недоступно' : 'ссылка', tone: 'faint' };
-}
+export { playBadge } from './musicBadge';
+import { playBadge } from './musicBadge';
 
-/** Три полоски «сейчас играет». */
+/** Три полоски «сейчас играет». Без постоянной анимации: она мешала прокрутке списков. */
 export function Bars({ playing, color, size = 14 }: { playing: boolean; color: string; size?: number }) {
-  const motion = useMotion();
-  const v = [useSharedValue(0.4), useSharedValue(0.8), useSharedValue(0.55)];
-  useEffect(() => {
-    v.forEach((x, i) => {
-      if (playing && motion) x.value = withRepeat(withSequence(withTiming(1, { duration: 280 + i * 90, easing: Easing.inOut(Easing.quad) }), withTiming(0.25, { duration: 320 + i * 70, easing: Easing.inOut(Easing.quad) })), -1, true);
-      else { cancelAnimation(x); x.value = withTiming(0.35, { duration: 200 }); }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, motion]);
-  const st = v.map((x) => useAnimatedStyle(() => ({ height: Math.max(2, x.value * size) })));
-  return <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: size, width: size }}>{st.map((a, i) => <Animated.View key={i} style={[{ width: 3, borderRadius: 1.5, backgroundColor: color }, a]} />)}</View>;
+  const h = playing ? [0.55, 1, 0.75] : [0.35, 0.35, 0.35];
+  return <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: size, width: size }}>{h.map((k, i) => <View key={i} style={{ width: 3, height: Math.max(2, k * size), borderRadius: 1.5, backgroundColor: color }} />)}</View>;
 }
 
-export function TrackRow({ t, onPress, note, index, right, testID }: { t: TrackView; onPress?: () => void; note?: string; index?: number; right?: React.ReactNode; testID?: string }) {
+export function TrackRow({ t, onPress, note, index, right, testID, showSources }: { t: TrackView; onPress?: () => void; note?: string; index?: number; right?: React.ReactNode; testID?: string; showSources?: boolean }) {
   const c = useColors();
   const current = usePlayer((p) => p.current?.id === t.id);
   const playing = usePlayer((p) => p.current?.id === t.id && p.playing);
@@ -79,7 +65,7 @@ export function TrackRow({ t, onPress, note, index, right, testID }: { t: TrackV
   const badge = playBadge(src);
   const state = src ? effectiveExplicit(src) : 'unknown';
   const tags = src ? parseTitle(src.title).versionTags : [];
-  const dim = badge.tone === 'faint';
+  const dim = badge.tone === 'faint' && src?.availability !== 'region_blocked';
   return (
     <Pressable testID={testID} onPress={onPress} onLongPress={() => openSheet(t)} accessibilityRole="button" accessibilityLabel={`${t.title}, ${t.artist}, ${badge.label}`}
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7, opacity: pressed ? 0.6 : dim ? 0.7 : 1 })}>
@@ -100,17 +86,16 @@ export function TrackRow({ t, onPress, note, index, right, testID }: { t: TrackV
           {t.durationSec ? <T v="small" c="faint" style={{ marginLeft: 'auto' }}>{formatDuration(t.durationSec)}</T> : null}
         </View>
         {note ? <T v="small" c="faint" numberOfLines={2} style={{ marginTop: 2 }}>{note}</T> : null}
+        {showSources ? <T v="small" c="faint" numberOfLines={1} style={{ marginTop: 1 }}>Найдено: {[...new Set(t.sources.map((x) => sourceName(x.source)))].join(', ')}</T> : null}
       </View>
       {right ?? <View style={{ marginRight: -10 }}><IconBtn name="more" label={`Действия: ${t.title}`} size={20} color={c.muted} onPress={() => openSheet(t)} /></View>}
     </Pressable>
   );
 }
 
-export function TrackList({ tracks, context, notes, numbered }: { tracks: TrackView[]; context: string; notes?: Map<string, string>; numbered?: boolean }) {
-  return <View>{tracks.map((t, i) => <TrackRow key={t.id} t={t} note={notes?.get(t.id)} index={numbered ? i + 1 : undefined} onPress={() => playOrOpen(tracks, i, context)} />)}</View>;
+export function TrackList({ tracks, context, notes, numbered, showSources }: { tracks: TrackView[]; context: string; notes?: Map<string, string>; numbered?: boolean; showSources?: boolean }) {
+  return <View>{tracks.map((t, i) => <TrackRow key={t.id} t={t} note={notes?.get(t.id)} index={numbered ? i + 1 : undefined} showSources={showSources} onPress={() => playOrOpen(tracks, i, context)} />)}</View>;
 }
-
-let previewHinted = false;
 
 /** Запускает трек как умеет его источник: целиком, фрагментом, во встроенном плеере или через меню. */
 export function playOrOpen(tracks: TrackView[], i: number, context: string) {
@@ -119,7 +104,9 @@ export function playOrOpen(tracks: TrackView[], i: number, context: string) {
   if (mode === 'player' || mode === 'preview') {
     const same = tracks.filter((x) => x.preferred && playMode(x.preferred) === mode);
     void playTracks(same, same.indexOf(t), mode === 'preview' ? 'preview' : context);
-    if (mode === 'preview' && !previewHinted) { previewHinted = true; toast('Играет фрагмент 30 секунд. Полностью: «⋯» → Яндекс Музыка, VK или Звук'); }
+  } else if (mode === 'embed' && t.preferred?.source === 'youtube') {
+    const videos = tracks.filter((x) => x.preferred?.source === 'youtube' && playMode(x.preferred) === 'embed');
+    playVideos(videos, videos.indexOf(t));
   } else if (mode === 'embed') openEmbed(t);
   else openSheet(t);
 }
@@ -172,7 +159,6 @@ const HIDE_MINI = ['/player', '/queue', '/lyrics', '/onboarding', '/embed'];
 
 function MiniPlayer() {
   const c = useColors();
-  const motion = useMotion();
   const cur = usePlayer((p) => p.current);
   const src = usePlayer((p) => p.source);
   const playing = usePlayer((p) => p.playing);
@@ -182,7 +168,7 @@ function MiniPlayer() {
   if (!cur) return null;
   const preview = src ? playMode(src) === 'preview' : false;
   return (
-    <Animated.View entering={motion ? FadeInDown.duration(260) : undefined} exiting={motion ? FadeOutDown.duration(200) : undefined}>
+    <View>
       <Pressable testID="mini-player" accessibilityRole="button" accessibilityLabel={`Открыть плеер: ${cur.title}`} onPress={() => router.push('/player')}
         onTouchStart={(e) => { start.current = e.nativeEvent.pageX; }}
         onTouchEnd={(e) => { const d = start.current === null ? 0 : e.nativeEvent.pageX - start.current; start.current = null; if (d < -70) void player.next(); else if (d > 70) void player.previous(); }}
@@ -199,7 +185,7 @@ function MiniPlayer() {
         <IconBtn name="next" label="Следующий трек" onPress={() => void player.next()} />
       </Pressable>
       <View style={{ height: 2, marginHorizontal: 14, borderRadius: 1, backgroundColor: c.line, overflow: 'hidden' }}><View style={{ height: 2, width: `${progress * 100}%`, backgroundColor: c.accent }} /></View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -209,7 +195,7 @@ function TabRow({ active }: { active: number }) {
   const x = useSharedValue(0);
   const motion = useMotion();
   const cell = w / TABS.length;
-  useEffect(() => { x.value = motion ? withSpring(active * cell, { damping: 18, stiffness: 190 }) : active * cell; }, [active, cell, motion, x]);
+  useEffect(() => { x.value = motion ? withTiming(active * cell, { duration: 180 }) : active * cell; }, [active, cell, motion, x]);
   const pill = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   return (
     <View accessibilityRole="tablist" onLayout={(e) => setW(e.nativeEvent.layout.width)} style={{ flexDirection: 'row', height: TAB_HEIGHT, paddingHorizontal: 0 }}>
@@ -233,13 +219,14 @@ export function Dock() {
   const insets = useSafeAreaInsets();
   const path = usePathname();
   const hasTrack = usePlayer((p) => !!p.current);
+  const video = useVideo((v) => v.active);
   const tab = TABS.findIndex((t) => t.href === path);
-  const showMini = hasTrack && !HIDE_MINI.includes(path);
+  const showMini = (hasTrack || video) && !HIDE_MINI.includes(path);
   if (tab < 0 && !showMini) return null;
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', left: 10, right: 10, bottom: insets.bottom + 8 }}>
       <Glass floating radius={26} intensity={55} testID="dock">
-        {showMini ? <MiniPlayer /> : null}
+        {showMini ? video ? <VideoMini /> : <MiniPlayer /> : null}
         {tab >= 0 ? <TabRow active={tab} /> : null}
       </Glass>
     </View>
@@ -262,7 +249,6 @@ const go = (fn: () => void) => { closeSheet(); setTimeout(fn, 30); };
 
 export function TrackSheet() {
   const c = useColors();
-  const motion = useMotion();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const t = useUi((u) => u.sheetTrack);
@@ -289,10 +275,10 @@ export function TrackSheet() {
   const offlineSrc = t.sources.find((s) => s.canOffline && !s.localPath && adapter(s.source)?.capabilities.canOffline);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Animated.View entering={motion ? FadeIn.duration(180) : undefined} exiting={motion ? FadeOut.duration(160) : undefined} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
         <Pressable accessibilityLabel="Закрыть меню" style={{ flex: 1 }} onPress={close} />
-      </Animated.View>
-      <Animated.View entering={motion ? SlideInDown.springify().damping(20).stiffness(170) : undefined} exiting={motion ? SlideOutDown.duration(200) : undefined} style={{ position: 'absolute', left: 8, right: 8, bottom: insets.bottom + 8, maxHeight: height * 0.84 }}>
+      </View>
+      <View style={{ position: 'absolute', left: 8, right: 8, bottom: insets.bottom + 8, maxHeight: height * 0.84 }}>
         <Glass floating radius={28} intensity={70}>
           <View style={{ alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: c.line, marginTop: 8 }} />
           <ScrollView contentContainerStyle={{ padding: 18, paddingTop: 12 }}>
@@ -308,7 +294,7 @@ export function TrackSheet() {
               {playable ? <SheetAction icon="play" label="Слушать" onPress={() => go(() => void playTracks([t]))} /> : null}
               {playable ? <SheetAction icon="next" label="Играть следующим" onPress={() => go(() => void player.playNext(t.id))} /> : null}
               {playable ? <SheetAction icon="queue" label="Добавить в очередь" onPress={() => go(() => void player.addToQueue([t.id]))} /> : null}
-              {!playable && embedSrc ? <SheetAction icon="play" label={`Слушать в плеере ${sourceName(embedSrc.source)}`} sub="В России нужен VPN" onPress={() => go(() => openEmbed(t))} /> : null}
+              {!playable && embedSrc ? <SheetAction icon="play" label={embedSrc.source === 'youtube' ? 'Слушать на YouTube в приложении' : `Слушать в плеере ${sourceName(embedSrc.source)}`} onPress={() => go(() => (embedSrc.source === 'youtube' ? playVideos([t], 0) : openEmbed(t)))} /> : null}
               {!playable && previewSrc ? <SheetAction icon="play" label="Послушать фрагмент 30 секунд" sub={sourceName(previewSrc.source)} onPress={() => go(() => void player.playList([{ trackId: t.id, sourceTrackId: previewSrc.id }], 0, 'preview'))} /> : null}
               {!playable ? <View style={{ marginVertical: 6 }}>
                 <T v="small" c="muted" style={{ marginBottom: 6 }}>Полностью эту песню можно послушать по подписке:</T>
@@ -341,7 +327,7 @@ export function TrackSheet() {
             </>}
           </ScrollView>
         </Glass>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -387,40 +373,25 @@ export function OfflineBanner() {
 
 export function Toast() {
   const c = useColors();
-  const motion = useMotion();
   const insets = useSafeAreaInsets();
   const text = useUi((u) => u.toast);
   if (!text) return null;
   return (
-    <Animated.View key={text} entering={motion ? FadeInDown.duration(220) : undefined} exiting={motion ? FadeOut.duration(200) : undefined} pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 8, left: 14, right: 14 }}>
+    <View key={text} pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 8, left: 14, right: 14 }}>
       <Glass floating solid radius={RADIUS.card} intensity={60} style={{ paddingVertical: 12, paddingHorizontal: 16 }}><Text style={[TYPE.strong, { color: c.text }]}>{text}</Text></Glass>
-    </Animated.View>
+    </View>
   );
 }
 
-// ---------- Кнопка-камертон ----------
+// ---------- Кнопка воспроизведения ----------
 
-function Ring({ delay, size, color }: { delay: number; size: number; color: string }) {
-  const k = useSharedValue(0);
-  useEffect(() => {
-    const id = setTimeout(() => { k.value = withRepeat(withTiming(1, { duration: 2200, easing: Easing.out(Easing.quad) }), -1, false); }, delay);
-    return () => { clearTimeout(id); cancelAnimation(k); };
-  }, [delay, k]);
-  const st = useAnimatedStyle(() => ({ opacity: 0.55 * (1 - k.value), transform: [{ scale: 1 + k.value * 0.7 }] }));
-  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: color }, st]} />;
-}
-
-/** Круглая кнопка воспроизведения. Пока звучит музыка, от неё расходятся волны, как от камертона. */
+/** Круглая кнопка воспроизведения. */
 export function PlayOrb({ playing, size = 72, onPress, label, testID, busy }: { playing: boolean; size?: number; onPress: () => void; label: string; testID?: string; busy?: boolean }) {
   const c = useColors();
-  const motion = useMotion();
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      {playing && motion ? <><Ring delay={0} size={size} color={c.accent} /><Ring delay={1100} size={size} color={c.accent} /></> : null}
-      <Press testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} disabled={busy} scaleTo={0.92}
-        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.7 : 1 }}>
-        <Icon name={playing ? 'pause' : 'play'} size={size * 0.44} color={c.onAccent} />
-      </Press>
-    </View>
+    <Press testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} disabled={busy} scaleTo={0.92}
+      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.7 : 1 }}>
+      <Icon name={playing ? 'pause' : 'play'} size={size * 0.44} color={c.onAccent} />
+    </Press>
   );
 }

@@ -8,7 +8,8 @@ import { newQid, type QueueItem } from '@/player/queue';
 import { sourceContext } from '@/platform/secureConfig';
 import { adapter } from '@/sources/registry';
 import { setSubsonicDisplayConfig } from '@/sources/subsonic';
-import { resolveStream, sourceCtx } from '@/services/media';
+import { onVideoStart, stopVideo, useVideo, videoPause } from '@/player/video';
+import { previewIds, resolveStream, sourceCtx } from '@/services/media';
 import { invalidateReco, nextWave, radioBatch, surpriseMe } from '@/services/reco';
 import { artistKey } from '@/reco/engine';
 import { settings, useSettings } from './settings';
@@ -63,7 +64,7 @@ export function boot(): Promise<void> {
       async recordPlay(p, bucket) {
         if (!settings().recordHistory) return;
         // Фрагменты не считаются прослушиваниями: иначе 30 секунд выглядели бы как пропуск.
-        if (adapter(p.sourceTrackId.split(':')[0])?.capabilities.playback === 'preview-only') return;
+        if (previewIds.has(p.sourceTrackId) || adapter(p.sourceTrackId.split(':')[0])?.capabilities.playback === 'preview-only') return;
         await repo.addPlay(p);
         invalidateReco();
         if (bucket) {
@@ -80,7 +81,9 @@ export function boot(): Promise<void> {
     });
     player.setFade(settings().fade);
     player.setUserVolume(settings().volume);
-    player.subscribe((s) => usePlayer.setState(s));
+    player.subscribe((s) => { usePlayer.setState(s); if (s.playing && useVideo.getState().playing) videoPause(); });
+    // Видео YouTube и плеер Камертона не звучат одновременно.
+    onVideoStart(() => player.pause());
     const saved = await repo.kvGet<PersistedPlayer | null>('player', null);
     if (saved) await player.restore(saved).catch(() => undefined);
   })();
@@ -89,6 +92,7 @@ export function boot(): Promise<void> {
 
 /** Запуск списка треков с автоматическим выбором источника. */
 export function playTracks(tracks: TrackView[], start = 0, context = 'list') {
+  stopVideo();
   const items = tracks.map((t) => ({ trackId: t.id, sourceTrackId: t.preferred?.id }));
   return player.playList(items, start, context);
 }

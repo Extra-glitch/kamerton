@@ -10,7 +10,7 @@ import { memoryCtx } from './helpers';
 
 describe('честность источников', () => {
   it('в приложении играют только разрешённые источники', () => {
-    expect([...DIRECT_SOURCES].sort()).toEqual(['archive', 'audius', 'jamendo', 'local', 'radio', 'subsonic']);
+    expect([...DIRECT_SOURCES].sort()).toEqual(['archive', 'audius', 'jamendo', 'local', 'radio', 'soundcloud', 'subsonic']);
   });
   it.each(['yandex', 'vk', 'zvuk', 'youtube_music', 'bandcamp'])('%s только открывается по ссылке', async (id) => {
     const a = adapter(id)!;
@@ -27,14 +27,20 @@ describe('честность источников', () => {
     expect(s.capabilities).toMatchObject({ playback: 'external-app', mlAllowed: false, canMixWithOtherSources: false, canCrossfade: false });
     expect((await s.status(memoryCtx())).state).toBe('needs_setup');
   });
-  it('YouTube и SoundCloud: только видимый официальный плеер, без фона и без скачивания', async () => {
-    for (const id of ['youtube', 'soundcloud']) {
-      const a = adapter(id)!;
-      expect(a.capabilities).toMatchObject({ playback: 'visible-embed', requiresVisiblePlayer: true, canBackground: false, canOffline: false });
-      expect(a.resolveStream).toBeUndefined();
-      expect((await a.status(memoryCtx())).state).toBe('ready');
-      expect(a.doc.limits.join(' ')).toMatch(/VPN/);
-    }
+  it('YouTube: поиск по ключу, только видимый плеер без фона и скачивания', async () => {
+    const a = adapter('youtube')!;
+    expect(a.capabilities).toMatchObject({ playback: 'visible-embed', requiresVisiblePlayer: true, canBackground: false, canOffline: false, supportsSearch: true });
+    expect(a.resolveStream).toBeUndefined();
+    expect((await a.status(memoryCtx())).state).toBe('needs_setup');
+    expect((await a.status(memoryCtx({ youtube: { apiKey: 'k' } }))).state).toBe('ready');
+  });
+  it('SoundCloud: целиком в плеере только со своим ключом API, без ключа ссылки во встроенном плеере', async () => {
+    const a = adapter('soundcloud')!;
+    expect(a.capabilities).toMatchObject({ playback: 'direct-stream', mlAllowed: false, canOffline: false });
+    expect((await a.status(memoryCtx())).state).toBe('needs_setup');
+    expect((await a.status(memoryCtx({ soundcloud: { clientId: 'i', clientSecret: 's' } }))).state).toBe('ready');
+    expect(playMode({ source: 'soundcloud', availability: 'full', extra: { embed: { provider: 'soundcloud', url: 'x' } } })).toBe('embed');
+    expect(a.doc.limits.join(' ')).toMatch(/Artist Pro/);
   });
   it('Deezer: только фрагменты, без рекомендательного обучения', async () => {
     const d = adapter('deezer')!;
@@ -43,7 +49,9 @@ describe('честность источников', () => {
     expect(playMode({ source: 'deezer', availability: 'full' })).toBe('none');
     expect(playMode({ source: 'itunes', availability: 'external_only' })).toBe('none');
     expect(playMode({ source: 'audius', availability: 'full' })).toBe('player');
-    expect(playMode({ source: 'soundcloud', availability: 'full' })).toBe('embed');
+    expect(playMode({ source: 'soundcloud', availability: 'full' })).toBe('player');
+    expect(playMode({ source: 'youtube', availability: 'full' })).toBe('embed');
+    expect(playMode({ source: 'itunes', availability: 'subscription_required' })).toBe('none');
     expect(DIRECT_SOURCES.has('deezer')).toBe(false);
   });
   it('кнопки «слушать полностью» ведут в официальные сервисы', () => {

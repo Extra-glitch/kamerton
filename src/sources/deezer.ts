@@ -72,13 +72,20 @@ export const deezer: MusicSourceAdapter = {
   canHandleLink: (url) => /deezer\.com\/(?:[a-z]{2}\/)?(album|playlist)\/\d+/i.test(url),
   externalUrl: (v) => v.externalUrl ?? `https://www.deezer.com/search/${encodeURIComponent(`${v.artist} ${v.title}`)}`,
 
-  async search(_ctx, q, limit) {
+  async search(_ctx, q, limit, page = 0) {
     const out = emptySearch();
+    if (page) {
+      const r = await get<any>('/search', { q, limit, index: page * limit });
+      out.tracks = (r.data ?? []).map((t: any) => mapDeezerTrack(t));
+      out.hasMore = !!r.next;
+      return out;
+    }
     const [tracks, artists, albums] = await Promise.allSettled([
       get<any>('/search', { q, limit }), get<any>('/search/artist', { q, limit: 6 }), get<any>('/search/album', { q, limit: 8 }),
     ]);
     if (tracks.status === 'rejected') throw tracks.reason;
     out.tracks = (tracks.value.data ?? []).map((t: any) => mapDeezerTrack(t));
+    out.hasMore = !!tracks.value.next;
     if (artists.status === 'fulfilled') out.artists = (artists.value.data ?? []).map(artistRef);
     if (albums.status === 'fulfilled') out.albums = (albums.value.data ?? []).map(albumRef);
     return out;

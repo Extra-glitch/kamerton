@@ -9,10 +9,10 @@ import type { Playlist } from '@/core/types';
 import * as repo from '@/db/repo';
 import { pickAudioFiles, scanDevice } from '@/platform/localMusic';
 import { bumpData, toast, useUi } from '@/state/app';
-import { Btn, Chip, Cover, Empty, Field, IconBtn, Row, Shelf, s as ks, T } from '@/ui/kit';
+import { Btn, Chip, Cover, Empty, Field, IconBtn, Row, Shelf, s as ks, T, useBottomPad } from '@/ui/kit';
 import { Ambient } from '@/ui/ambient';
 import { playOrOpen, TrackRow } from '@/ui/music';
-import { BOTTOM_PAD, SPACE, useColors } from '@/ui/theme';
+import { SPACE, useColors } from '@/ui/theme';
 import { sourceName } from '@/sources/registry';
 
 type Tab = 'lists' | 'tracks' | 'liked' | 'albums' | 'artists' | 'downloads' | 'local';
@@ -20,6 +20,7 @@ const TABS: [Tab, string][] = [['lists', 'Плейлисты'], ['liked', 'Лю�
 const SORTS: [repo.LibrarySort, string][] = [['added', 'Недавно добавленные'], ['title', 'Название'], ['artist', 'Исполнитель'], ['album', 'Альбом'], ['date', 'Дата']];
 
 export default function Library() {
+  const bottomPad = useBottomPad();
   const c = useColors();
   const insets = useSafeAreaInsets();
   const version = useUi((u) => u.dataVersion);
@@ -70,7 +71,7 @@ export default function Library() {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         <Ambient strength={0.75} />
-        <FlashList data={shown} keyExtractor={(t) => t.id} ListHeaderComponent={header} contentContainerStyle={{ paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }} keyboardShouldPersistTaps="handled"
+        <FlashList data={shown} keyExtractor={(t) => t.id} ListHeaderComponent={header} contentContainerStyle={{ paddingHorizontal: SPACE.page, paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled"
           renderItem={({ item, index }) => <TrackRow t={item} onPress={() => playOrOpen(shown, index, `library:${tab}`)} />}
           ListEmptyComponent={tracks.isLoading ? null : <Empty title={tab === 'liked' ? 'Пока без любимого' : tab === 'local' ? 'Файлы не добавлены' : tab === 'downloads' ? 'Ничего не сохранено' : 'Коллекция пуста'} text={tab === 'local' ? 'Найдите музыку на телефоне или выберите файлы вручную.' : tab === 'downloads' ? 'Сохранять можно треки с вашего сервера и записи архива, где это разрешено.' : 'Лайкайте треки или импортируйте плейлисты из других сервисов.'} action={tab === 'local' ? undefined : 'Импорт музыки'} onAction={() => router.push('/import')} />} />
       </View>
@@ -81,7 +82,7 @@ export default function Library() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
         <Ambient strength={0.75} />
-      <FlashList data={[0]} keyExtractor={() => 'x'} ListHeaderComponent={header} contentContainerStyle={{ paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }} keyboardShouldPersistTaps="handled" renderItem={() => (
+      <FlashList data={[0]} keyExtractor={() => 'x'} ListHeaderComponent={header} contentContainerStyle={{ paddingHorizontal: SPACE.page, paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled" renderItem={() => (
         <View>
           {tab === 'lists' ? <>
             <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>

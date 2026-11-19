@@ -57,7 +57,7 @@ describe('Deezer', () => {
 describe('Apple (каталог)', () => {
   it('разбирает песню и увеличивает обложку', () => {
     const t = mapItunesTrack({ kind: 'song', trackId: 9, artistId: 7, trackName: 'Мальчик на девятке', artistName: 'DEAD BLONDE', collectionName: 'Мальчик на девятке', trackTimeMillis: 145000, trackExplicitness: 'notExplicit', primaryGenreName: 'Поп', releaseDate: '2020-11-06T12:00:00Z', artworkUrl100: 'https://is1-ssl.mzstatic.com/image/thumb/x/100x100bb.jpg', trackViewUrl: 'https://music.apple.com/ru/album/1?i=9' });
-    expect(t).toMatchObject({ source: 'itunes', availability: 'external_only', explicit: 'not_explicit', durationSec: 145, year: 2020, coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/x/600x600bb.jpg' });
+    expect(t).toMatchObject({ source: 'itunes', availability: 'subscription_required', explicit: 'not_explicit', durationSec: 145, year: 2020, coverUrl: 'https://is1-ssl.mzstatic.com/image/thumb/x/600x600bb.jpg' });
     expect(itunesExplicit('cleaned')).toBe('clean');
   });
 });

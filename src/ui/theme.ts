@@ -68,12 +68,15 @@ export function useIsLight(): boolean { return useColors().blur === 'light'; }
 
 // Unbounded — широкий геометрический гротеск с кириллицей для заголовков, Golos Text — для текста.
 export const FONT = { d8: 'Display-700', d6: 'Display-500', b4: 'Body-400', b5: 'Body-500', b7: 'Body-700' };
+/** Крупное название песни: узкий жирный шрифт, чтобы длинные названия не вылезали за край. */
+export const SONG_TITLE = { fontFamily: 'Body-700', fontSize: 26, lineHeight: 32 };
 
 export const TYPE = {
   poster: { fontFamily: FONT.d8, fontSize: 40, lineHeight: 46, letterSpacing: -0.6 },
   h1: { fontFamily: FONT.d8, fontSize: 28, lineHeight: 34, letterSpacing: -0.4 },
-  h2: { fontFamily: FONT.d8, fontSize: 20, lineHeight: 26, letterSpacing: -0.2 },
-  h3: { fontFamily: FONT.d6, fontSize: 16, lineHeight: 22 },
+  // Заголовки разделов набраны узким Golos: широкий Unbounded в них не помещался на маленьких экранах.
+  h2: { fontFamily: FONT.b7, fontSize: 21, lineHeight: 27 },
+  h3: { fontFamily: FONT.b7, fontSize: 17, lineHeight: 23 },
   title: { fontFamily: FONT.b5, fontSize: 15.5, lineHeight: 21 },
   body: { fontFamily: FONT.b4, fontSize: 15.5, lineHeight: 23 },
   strong: { fontFamily: FONT.b5, fontSize: 14.5, lineHeight: 20 },

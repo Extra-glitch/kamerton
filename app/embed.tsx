@@ -48,14 +48,13 @@ export default function EmbedScreen() {
       <T c="muted" style={{ marginBottom: 14 }}>{t.artist}, плеер {sourceName(src.source)}</T>
       <Glass radius={20} style={{ width: w, height: h, alignSelf: 'center', backgroundColor: '#000' }}>
         {Platform.OS === 'web' ? <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}><T c="muted" style={{ textAlign: 'center' }}>Встроенный плеер работает в приложении на телефоне.</T></View>
-          : active ? <WebView key={attempt} source={{ html: html(embed), baseUrl: 'https://kamerton.app' }} style={{ backgroundColor: '#000' }} allowsFullscreenVideo allowsInlineMediaPlayback
+          : active ? <WebView key={attempt} source={{ html: html(embed), baseUrl: 'https://app.kamerton.player' }} style={{ backgroundColor: '#000' }} allowsFullscreenVideo allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false} onError={() => setFailed(true)} onHttpError={() => setFailed(true)} setSupportMultipleWindows={false}
-            onShouldStartLoadWithRequest={(r) => { if (r.isTopFrame && !r.url.startsWith('about:') && !r.url.startsWith('https://kamerton.app')) { void Linking.openURL(r.url); return false; } return true; }} />
+            onShouldStartLoadWithRequest={(r) => { if (r.isTopFrame && !r.url.startsWith('about:') && !r.url.startsWith('https://app.kamerton.player')) { void Linking.openURL(r.url); return false; } return true; }} />
             : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><T c="muted">Плеер остановлен, пока приложение было свёрнуто</T></View>}
       </Glass>
-      {failed ? <Notice tone="danger" text="Плеер не загрузился. Проверьте интернет и VPN." /> : null}
-      {embed.provider === 'soundcloud' ? <Notice text="Если плеер предлагает «Play on SoundCloud», нажмите «Listen in browser»: запись заиграет прямо здесь." /> : null}
-      <Notice title="В России нужен VPN" text={`${sourceName(src.source)} заблокирован. Если плеер остаётся пустым или бесконечно загружается, включите свой VPN и нажмите «Обновить». Скачать запись отсюда нельзя: это запрещают правила сервиса.`} />
+      {failed ? <Notice tone="danger" text={`${sourceName(src.source)} не загрузился. Если вы в России, включите VPN и нажмите «Обновить».`} /> : null}
+      {embed.provider === 'soundcloud' ? <T v="small" c="faint" style={{ marginTop: 8 }}>Если плеер предлагает «Play on SoundCloud», нажмите «Listen in browser».</T> : null}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
         <Btn label="Обновить" kind="line" onPress={() => { setFailed(false); setAttempt((n) => n + 1); }} style={{ flex: 1 }} />
         <Btn label={t.liked ? 'В любимом' : 'В любимое'} icon={t.liked ? 'heartOn' : 'heart'} kind="line" onPress={async () => { await applyFeedback(t.id, 'like', !t.liked); bumpData(); void q.refetch(); toast(t.liked ? 'Убрано из любимого' : 'Добавлено в любимое'); }} style={{ flex: 1 }} />
@@ -64,7 +63,6 @@ export default function EmbedScreen() {
         {src.externalUrl ? <Btn label={`Открыть в ${sourceName(src.source)}`} icon="link" kind="line" onPress={() => void Linking.openURL(src.externalUrl!)} style={{ flex: 1 }} /> : null}
         <Btn label="Ещё" icon="more" kind="line" onPress={() => openSheet(t)} style={{ flex: 1 }} />
       </View>
-      <T v="small" c="faint" style={{ marginTop: 12, color: c.faint }}>Звук идёт из плеера {sourceName(src.source)}: он не работает в фоне и на экране блокировки.</T>
     </Screen>
   );
 }

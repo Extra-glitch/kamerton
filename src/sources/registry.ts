@@ -51,14 +51,16 @@ export async function readySources(ctx: SourceContext, test: (a: MusicSourceAdap
 }
 
 /** Каталоги для поиска песен, которых нет в свободных источниках. */
-export const CATALOG_SOURCES = new Set(['deezer', 'itunes']);
+export const CATALOG_SOURCES = new Set(['deezer', 'itunes', 'spotify']);
 /** Сервисы, где песню можно дослушать полностью по подписке. */
 export const LISTEN_ELSEWHERE = ['yandex', 'vk', 'zvuk'];
 
 /** Как трек можно включить в Камертоне. */
-export function playMode(t: Pick<RemoteTrack, 'source' | 'availability'>): 'player' | 'preview' | 'embed' | 'none' {
+export function playMode(t: Pick<RemoteTrack, 'source' | 'availability'> & { extra?: Record<string, unknown> }): 'player' | 'preview' | 'embed' | 'none' {
   const a = byId.get(t.source);
   if (!a) return 'none';
+  // Запись по ссылке без ключа API играет во встроенном плеере сервиса.
+  if (t.extra?.embed && t.availability === 'full') return 'embed';
   if (a.capabilities.playback === 'visible-embed' && t.availability === 'full') return 'embed';
   if (!a.resolveStream) return 'none';
   if (t.availability === 'full' && a.capabilities.playback === 'direct-stream') return 'player';

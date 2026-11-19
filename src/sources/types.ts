@@ -65,6 +65,7 @@ export interface ArtistRef { source: SourceId; id: string; name: string; imageUr
 export interface PlaylistRef { source: SourceId; id: string; title: string; owner?: string; coverUrl?: string; trackCount?: number }
 
 export interface SearchOutcome {
+  hasMore?: boolean;
   tracks: RemoteTrack[];
   albums: AlbumRef[];
   artists: ArtistRef[];
@@ -99,7 +100,8 @@ export interface MusicSourceAdapter {
   status(ctx: SourceContext): Promise<SourceStatus>;
   /** Проверка введённых данных настоящим запросом к сервису. */
   verify?(ctx: SourceContext): Promise<string>;
-  search?(ctx: SourceContext, q: string, limit: number): Promise<SearchOutcome>;
+  /** page начинается с 0. Источник сообщает hasMore, если есть следующая страница. */
+  search?(ctx: SourceContext, q: string, limit: number, page?: number): Promise<SearchOutcome>;
   discover?(ctx: SourceContext, req: DiscoverRequest): Promise<RemoteTrack[]>;
   albumTracks?(ctx: SourceContext, albumId: string): Promise<RemoteTrack[]>;
   artistTracks?(ctx: SourceContext, artistId: string): Promise<RemoteTrack[]>;

@@ -10,6 +10,7 @@ import { displayCover } from '@/sources/subsonic';
 import { Ambient } from './ambient';
 import { Glass } from './glass';
 import { Icon, type IconName } from './icons';
+import { useVideoInset } from './video';
 import { BOTTOM_PAD, RADIUS, SPACE, TYPE, useColors, type TypeName } from './theme';
 
 type Tone = 'text' | 'muted' | 'faint' | 'accent' | 'warn' | 'danger' | 'onAccent' | 'ok';
@@ -32,9 +33,15 @@ export function Press({ style, children, scaleTo = 0.97, ...rest }: PressablePro
   );
 }
 
+/** Отступ снизу под нижнюю панель и, если играет видео, под его панель. */
+export function useBottomPad(): number {
+  return BOTTOM_PAD + useVideoInset();
+}
+
 export function Screen({ children, title, back = true, right, scroll = true, ambient = true, sub }: { children: ReactNode; title?: string; back?: boolean; right?: ReactNode; scroll?: boolean; onRefresh?: () => void; ambient?: boolean; sub?: string }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const pad = useBottomPad();
   const head = back || right ? (
     <View style={[s.head, { paddingTop: insets.top + 6 }]}>
       {back ? <RoundBtn name="back" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} /> : null}
@@ -42,13 +49,13 @@ export function Screen({ children, title, back = true, right, scroll = true, amb
       {right}
     </View>
   ) : <View style={{ height: insets.top + 14 }} />;
-  const heading = title ? <View style={{ marginBottom: 18, marginTop: 4 }}><T v="h1" accessibilityRole="header">{title}</T>{sub ? <T c="muted" style={{ marginTop: 6 }}>{sub}</T> : null}</View> : null;
+  const heading = title ? <View style={{ marginBottom: 18, marginTop: 4 }}><T v="h1" accessibilityRole="header" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{title}</T>{sub ? <T c="muted" style={{ marginTop: 6 }}>{sub}</T> : null}</View> : null;
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       {ambient ? <Ambient strength={0.75} /> : null}
       {head}
       {scroll ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }} keyboardShouldPersistTaps="handled">{heading}{children}</ScrollView>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: SPACE.page, paddingBottom: pad }} keyboardShouldPersistTaps="handled">{heading}{children}</ScrollView>
       ) : <View style={{ flex: 1, paddingHorizontal: SPACE.page }}>{heading}{children}</View>}
     </View>
   );

@@ -48,6 +48,23 @@ export const musicBrainz = {
     const hit = (r.artists ?? []).find((a: any) => a.score >= 90 && similarity(a.name, name) >= 0.9);
     return hit?.id ?? null;
   },
+  /**
+   * Другие написания имени исполнителя: MusicBrainz хранит псевдонимы на разных языках,
+   * например «Моргенштерн» для MORGENSHTERN. Возвращает основное имя и латинские варианты.
+   */
+  async artistNames(q: string): Promise<string[]> {
+    const text = luceneEscape(q.trim());
+    const r = await httpJson<any>(`${BASE}/artist?${query({ fmt: 'json', query: `alias:"${text}" OR artist:"${text}" OR sortname:"${text}"`, limit: 4 })}`, { service: 'MusicBrainz', limiter, retries: 0, timeoutMs: 6000 });
+    const out: string[] = [];
+    for (const a of r.artists ?? []) {
+      if ((a.score ?? 0) < 90) continue;
+      const names = [a.name, a['sort-name'], ...(a.aliases ?? []).map((x: any) => x.name)].filter((x: unknown): x is string => typeof x === 'string');
+      // Псевдоним должен действительно совпадать с запросом, иначе это другой исполнитель.
+      if (!names.some((n) => similarity(n, q) >= 0.9)) continue;
+      out.push(a.name);
+    }
+    return [...new Set(out)];
+  },
   async releaseGroups(artistMbid: string): Promise<{ id: string; title: string; type?: string; date?: string }[]> {
     const r = await get('/release-group', { artist: artistMbid, limit: 100 });
     return (r['release-groups'] ?? []).map((g: any) => ({ id: g.id, title: g.title, type: g['primary-type'], date: g['first-release-date'] || undefined }));

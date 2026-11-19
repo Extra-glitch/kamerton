@@ -151,7 +151,11 @@ export interface HomeData {
 }
 
 export async function loadHome(): Promise<HomeData> {
-  const poolResult = await refreshPool();
+  // Главная открывается сразу из сохранённого. Пополнение из интернета идёт в фоне,
+  // ждём его только при самом первом запуске, когда показывать ещё нечего.
+  const have = (await repo.poolTrackIds(100)).length;
+  const poolResult: PoolResult = have >= 15 ? { added: 0, failed: [] } : await refreshPool();
+  if (have >= 15) void refreshPool().catch(() => undefined);
   const dailyItems = await dailyDiscoveries();
   const wave = await nextWave(6, [], [], false); // это предпросмотр, в журнал он не идёт
   const { pool, profile, tracks } = await loadReco();
