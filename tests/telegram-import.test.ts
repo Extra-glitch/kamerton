@@ -10,7 +10,7 @@ vi.mock('expo-network', () => ({ getNetworkStateAsync: async () => ({ type: 'WIF
 
 import type { RemoteTrack } from '@/core/types';
 import * as repo from '@/db/repo';
-import { isOpaqueName } from '@/import/fileNames';
+import { fileUri, isOpaqueName } from '@/import/fileNames';
 import { trackFromFile } from '@/import/localTrack';
 import { setDisabledSources } from '@/sources/registry';
 import { wavePool } from '@/services/reco';
@@ -23,6 +23,16 @@ describe('имена файлов из Telegram', () => {
       expect(isOpaqueName(n)).toBe(true);
     for (const n of ['Земфира - Искала.mp3', 'MORGENSHTERN - Cadillac (@TgSoundBot).mp3', 'Кино_-_Группа_крови.mp3', '03. Lida - Lyubov.m4a', 'Track of the year.mp3'])
       expect(isOpaqueName(n)).toBe(false);
+  });
+
+  it('путь с «#», пробелами и кириллицей превращается в целый адрес, а не обрезается на «#»', () => {
+    const path = '/data/user/0/app/cache/Земфира - Искала #2 (@TgSoundBot) 100%.mp3';
+    const uri = fileUri(`file://${path}`);
+    expect(uri).not.toContain('#');
+    expect(uri).not.toContain(' ');
+    expect(decodeURIComponent(new URL(uri).pathname)).toBe(path);
+    expect(fileUri(path)).toBe(uri);
+    expect(fileUri('content://media/external/audio/media/5')).toBe('content://media/external/audio/media/5');
   });
 
   it('файл без тегов с именем Telegram: «без названия» и просьба указать песню, а не набор цифр', () => {

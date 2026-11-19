@@ -6,6 +6,7 @@ import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import * as repo from '@/db/repo';
+import { fileUri } from '@/import/fileNames';
 import { importNewDeviceFiles, importShared } from '@/services/importFiles';
 import { bumpData, playTracks, toast } from '@/state/app';
 import { settings } from '@/state/settings';
@@ -13,12 +14,6 @@ import { settings } from '@/state/settings';
 export function ShareRoot({ children }: { children: ReactNode }) {
   return <ShareIntentProvider options={{ resetOnBackground: true }}>{children}</ShareIntentProvider>;
 }
-
-/**
- * Путь к копии файла в file://-адрес. Каждую часть пути кодируем: в именах из Telegram и загрузок бывают
- * пробелы, кириллица, «#» и «%», а без кодирования адрес обрезается на «#» или не открывается вовсе.
- */
-export const fileUri = (path: string) => (path.startsWith('file://') ? path : `file://${path.split('/').map(encodeURIComponent).join('/')}`);
 
 const plural = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'песня' : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'песни' : 'песен');
 
@@ -35,8 +30,10 @@ export function ShareReceiver() {
       return;
     }
     busy.current = true;
+    console.log('Поделиться: получено', JSON.stringify(files.map((f) => ({ name: f.name, mime: f.mime, size: f.size }))));
     toast(files.length > 1 ? `Добавляем ${files.length} файлов…` : 'Добавляем песню…');
     importShared(files).then(async (r) => {
+      console.log('Поделиться: итог', JSON.stringify({ files: r.files.map((f) => ({ name: f.name, title: f.title, titleFrom: f.titleFrom, coverFrom: f.coverFrom, known: f.known })), skipped: r.skipped }));
       bumpData();
       if (!r.trackIds.length) {
         toast(r.skipped[0]?.reason === 'не аудиофайл' ? 'Это не аудиофайл. Камертон принимает MP3, M4A, FLAC, OGG, OPUS и WAV.' : `Не удалось добавить: ${r.skipped[0]?.reason ?? 'неизвестная ошибка'}`);

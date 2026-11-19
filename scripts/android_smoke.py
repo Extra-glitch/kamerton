@@ -353,7 +353,24 @@ def to_app_cache(local, name):
 
 
 def send(uri, mime="audio/mpeg"):
-    shell(f"am start -a android.intent.action.SEND -t {mime} --eu android.intent.extra.STREAM '{uri}' -n {PACKAGE}/.MainActivity", check=False)
+    shell("logcat -c", check=False)
+    print("am start:", shell(f"am start -a android.intent.action.SEND -t {mime} --eu android.intent.extra.STREAM '{uri}' -n {PACKAGE}/.MainActivity", check=False).strip()[-200:], flush=True)
+
+
+def share_log():
+    """Что приложение записало о приёме файла: имя, тип, итог, ошибки."""
+    lines = adb("logcat", "-d", "-s", "ReactNativeJS:*", "FileDirectory:*", "ExpoShareIntent:*", check=False, timeout=60).splitlines()
+    picked = [l for l in lines if "Поделиться" in l or "не добавлен" in l or "File name" in l or "rror" in l]
+    return " || ".join(x[-260:] for x in picked[-4:])
+
+
+def to_tabs():
+    """Назад до экрана с нижней панелью: так следующая проверка начинается с понятного места."""
+    for _ in range(5):
+        if find(screen(), "Поиск"):
+            return
+        shell("input keyevent KEYCODE_BACK")
+        time.sleep(1)
 
 
 def telegram_checks():
@@ -365,12 +382,16 @@ def telegram_checks():
     time.sleep(2)
     send(uri)
     ok, st = wait_session(is_playing, 60)
+    # Пока музыка играет, снимок интерфейса часто недоступен: ставим на паузу и смотрим экран.
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
     ask = wait("Что это за песня?", 30)
     screenshot("06c-telegram-untitled")
-    record("Песня из Telegram без тегов играет, приложение просит указать название", ok and ask and not any(re.search(r"\d{6,}", s["title"]) for s in st), json.dumps(st, ensure_ascii=False), required=False)
+    untitled = ok and any("Без названия" in s["title"] for s in st) and not any(re.search(r"\d{6,}", s["title"]) for s in st)
+    record("Песня из Telegram без тегов играет как «Без названия» и приложение просит указать песню", untitled and ask,
+           json.dumps(st, ensure_ascii=False) + ("" if untitled and ask else f" | экран: {bool(ask)} | {share_log()}"), required=False)
     if ask:
         named = False
-        if type_into("Исполнитель и название", "Zemfira Iskala"):
+        if type_into("Например: Земфира", "Zemfira Iskala"):
             hit = None
             end = time.time() + 40
             while time.time() < end and not hit:
@@ -408,17 +429,18 @@ def telegram_checks():
     uri = to_app_cache(f"{tmp}/cp-tagged.mp3", CP_NAME)
     send(uri)
     ok, st = wait_session(lambda s: is_playing(s) and CP_TITLE in s["title"] and CP_ARTIST in s["title"], 45)
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
     time.sleep(1.5)
     screenshot("06f-cp1251-cover")
-    record("Теги в Windows-1251 и имя с пробелами, кириллицей и # читаются", ok, json.dumps(st, ensure_ascii=False), required=False)
-    shell("input keyevent KEYCODE_MEDIA_PAUSE")
-    time.sleep(1)
+    record("Теги в Windows-1251, обложка в файле и имя с пробелами, кириллицей и # читаются", ok, json.dumps(st, ensure_ascii=False) + ("" if ok else f" | {share_log()}"), required=False)
 
     # 3. Та же песня ещё раз: дубликата быть не должно.
     send(to_app_cache(f"{tmp}/cp-tagged.mp3", CP_NAME))
-    repeat = wait("уже есть", 25, exact=False)
-    record("Повторная отправка той же песни не создаёт дубликат", repeat, required=False)
+    time.sleep(6)
     shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    log = share_log()
+    repeat = '"known":true' in log
+    record("Повторная отправка той же песни не создаёт дубликат", repeat, "" if repeat else log, required=False)
 
     # 4. Большой файл: 25 минут в 320 кбит/с, около 60 МБ.
     big = f"{tmp}/big.mp3"
@@ -427,21 +449,22 @@ def telegram_checks():
     mb = os.path.getsize(big) / 1048576
     send(to_app_cache(big, "big file.mp3"))
     ok, st = wait_session(lambda s: is_playing(s) and BIG_TITLE in s["title"], 120)
-    record(f"Большой файл ({mb:.0f} МБ) добавляется и играет", ok, json.dumps(st, ensure_ascii=False), required=False)
+    record(f"Большой файл ({mb:.0f} МБ) добавляется и играет", ok, json.dumps(st, ensure_ascii=False) + ("" if ok else f" | {share_log()}"), required=False)
     shell("input keyevent KEYCODE_MEDIA_PAUSE")
     time.sleep(1)
 
     # 5. Журнал импорта: видно, откуда название и обложка.
     shell(f"am start -a android.intent.action.VIEW -d 'kamerton://import' -n {PACKAGE}/.MainActivity", check=False)
-    log = wait("Последние файлы", 20) or scroll_to("Последние файлы")
-    if log:
-        scroll_to_part("обложка", attempts=4)
+    log = wait("Последние файлы", 15) or scroll_to("Последние файлы", attempts=8)
+    for _ in range(3):
+        if log:
+            scroll_to_part("Уже был", attempts=2)
     time.sleep(1)
     screenshot("06g-import-log")
-    texts = " | ".join(seen_texts[-80:])
-    record("Журнал импорта показывает, откуда название и обложка", log and "обложка из файла" in texts and "Уже был в коллекции" in texts, required=False)
-    shell("input keyevent KEYCODE_BACK")
-    time.sleep(1)
+    texts = " | ".join(seen_texts[-120:])
+    entries = [t for t in seen_texts if "обложка" in t or "Не добавлен" in t]
+    record("Журнал импорта показывает, откуда название и обложка", log and "обложка из файла" in texts and "Уже был в коллекции" in texts, " || ".join(entries[-4:]), required=False)
+    to_tabs()
 
 
 def switch_checks():

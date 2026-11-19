@@ -51,3 +51,14 @@ export function isOpaqueName(name: string): boolean {
     || /^[0-9a-f]{16,}$/i.test(base)
     || /^\d+$/.test(base);
 }
+
+/**
+ * Путь к копии файла в правильный file://-адрес. expo-share-intent отдаёт «file://» + путь как есть, без
+ * кодирования. В именах файлов бывают пробелы, кириллица, «#», «?» и «%»: без кодирования адрес обрезается
+ * на «#» (всё после него считается якорем) и файл «не находится». Поэтому каждую часть пути кодируем.
+ */
+export function fileUri(path: string): string {
+  if (/^content:\/\//i.test(path)) return path;
+  const raw = path.replace(/^file:\/\//i, '');
+  return `file://${raw.split('/').map(encodeURIComponent).join('/')}`;
+}
