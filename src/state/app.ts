@@ -28,10 +28,10 @@ export const useUi = create<UiStore>(() => ({ sheetTrack: null, toast: null, dat
 export const openSheet = (t: TrackView) => useUi.setState({ sheetTrack: t });
 export const closeSheet = () => useUi.setState({ sheetTrack: null });
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-export function toast(text: string) {
+export function toast(text: string, ms = Math.min(9000, Math.max(3200, text.length * 55))) {
   useUi.setState({ toast: text });
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => useUi.setState({ toast: null }), 3200);
+  toastTimer = setTimeout(() => useUi.setState({ toast: null }), ms);
 }
 export const bumpData = () => { invalidateReco(); useUi.setState((s) => ({ dataVersion: s.dataVersion + 1 })); };
 
@@ -40,8 +40,10 @@ async function refill(context: string, queue: QueueItem[]): Promise<QueueItem[]>
   const toQueue = (l: { trackId: string; sourceTrackId: string; reason: string; bucket: string }[]) => l.map((x) => ({ ...x, qid: newQid() }));
   if (context === 'wave' || context === 'surprise') {
     const views = await repo.getViews(ids.slice(-5));
-    const list = context === 'wave' ? await nextWave(12, ids, views.map((v) => artistKey(v.artist))) : await surpriseMe(10, ids);
-    return toQueue(list);
+    try {
+      const list = context === 'wave' ? await nextWave(12, ids, views.map((v) => artistKey(v.artist))) : await surpriseMe(10, ids);
+      return toQueue(list);
+    } catch (e) { toast((e as Error).message); return []; }
   }
   if (context.startsWith('radio:')) {
     const [, seed] = context.split(':');
@@ -89,7 +91,13 @@ export function boot(): Promise<void> {
     setVideoResolver(findFullVersion);
     void refreshYouTubeReady();
     // Выключили или включили источник: пересчитываем, может ли каталог играть через YouTube.
-    useSettings.subscribe((n, o) => { if (n.disabledSources !== o.disabledSources) void refreshYouTubeReady(); });
+    useSettings.subscribe((n, o) => {
+      if (n.disabledSources === o.disabledSources && n.waveOwnMusic === o.waveOwnMusic) return;
+      // Выключенный источник сразу пропадает из карточек треков, очереди, поиска и рекомендаций.
+      void refreshYouTubeReady();
+      player.invalidateAll();
+      bumpData();
+    });
     const saved = await repo.kvGet<PersistedPlayer | null>('player', null);
     if (saved) await player.restore(saved).catch(() => undefined);
   })();

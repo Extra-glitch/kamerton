@@ -44,11 +44,11 @@ function FullListeningCard() {
   const c = useColors();
   // Компактная строка, а не большое окно: она не должна отодвигать результаты поиска.
   return (
-    <Press testID="connect-youtube" accessibilityRole="button" accessibilityLabel="Подключить YouTube, чтобы песни играли целиком" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginTop: 8 }}>
+    <Press testID="connect-youtube" accessibilityRole="button" accessibilityLabel="Подключить YouTube, чтобы песни играли целиком в его плеере" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginTop: 8 }}>
       <Glass radius={16} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14 }}>
         <View style={{ flex: 1 }}>
           <T v="strong" numberOfLines={1}>Сейчас играют фрагменты</T>
-          <T v="small" c="muted" numberOfLines={2}>Подключите YouTube, и песни будут звучать целиком</T>
+          <T v="small" c="muted" numberOfLines={2}>Подключите YouTube: песни зазвучат целиком в его плеере, без фона</T>
         </View>
         <Icon name="forward" size={20} color={c.accent} />
       </Glass>
@@ -66,6 +66,7 @@ export default function Search() {
   useEffect(() => { if (shared) setText(shared); }, [shared]);
   const [q, setQ] = useState('');
   const [group, setGroup] = useState<SearchGroup>('songs');
+  const off = useSettings((x) => x.disabledSources);
   const [only, setOnly] = useState<string | null>(null);
   const [version, setVersion] = useState<Version>('all');
   const [limit, setLimit] = useState(PAGE);
@@ -80,7 +81,8 @@ export default function Search() {
   useEffect(() => {
     setLimit(PAGE); setShowLoose(false); setOnly(null);
     if (q.length >= 2 && !link) void runSearch(q, group);
-  }, [q, group, link]);
+    // После выключения или включения источника результаты пересчитываются.
+  }, [q, group, link, off]);
   const l = useQuery({ queryKey: ['search-link', q], queryFn: () => searchLink(q), enabled: link, retry: 0 });
 
   const active = s.q === q && s.group === group;
@@ -110,7 +112,8 @@ export default function Search() {
         <Field testID="search-input" icon="search" placeholder="Песня, исполнитель или ссылка" value={text} onChangeText={setText} returnKeyType="search" autoCorrect={false} autoCapitalize="none" />
         <View style={[ks.wrap, { marginTop: -4, marginBottom: 6 }]}>{GROUPS.map(([g, label]) => <Chip key={g} label={label} on={group === g} onPress={() => setGroup(g)} />)}</View>
 
-        {!yt && group === 'songs' ? <FullListeningCard /> : null}
+        {!yt && group === 'songs' && !off.includes('youtube') ? <FullListeningCard /> : null}
+        {group !== 'songs' && off.includes(group) ? <Notice tone="muted" text={`${sourceName(group)} выключен в Диагностике источников. Включите его там, чтобы искать здесь.`} /> : null}
         {q.length < 2 ? <>
           <T v="h3" style={{ marginBottom: 10, marginTop: 14 }}>Жанры</T>
           <View style={ks.wrap}>{GENRES.map(([id, label]) => <Chip key={id} label={label} onPress={() => setText(id)} />)}</View>

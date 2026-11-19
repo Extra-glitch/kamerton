@@ -8,8 +8,9 @@ import { friendlyError } from '@/net/http';
 import { pickAudioFiles, pickTextFile, scanDevice } from '@/platform/localMusic';
 import { sourceContext as ctx } from '@/platform/secureConfig';
 import { ADAPTERS, adapter } from '@/sources/registry';
+import { importLog } from '@/services/importFiles';
 import { BIG_IMPORT, importTargets, linkImport, parseImportFile, remoteToItems, runMatching } from '@/services/media';
-import { bumpData, toast } from '@/state/app';
+import { bumpData, toast, useUi } from '@/state/app';
 import { Glass } from '@/ui/glass';
 import { Btn, Field, Notice, Press, Row, Screen, SwitchRow, T } from '@/ui/kit';
 import { useSettings } from '@/state/settings';
@@ -126,11 +127,34 @@ export default function ImportScreen() {
         <Row title="Выбрать аудиофайлы" sub="Через файловый менеджер Android, в том числе из папки Telegram" icon="plus" onPress={guard(async () => { const n = await pickAudioFiles(); if (n) { bumpData(); toast(`Добавлено файлов: ${n}`); } })} />
         <Glass style={{ padding: 14, marginTop: 12 }}>
           <T v="h3">Из Telegram и других приложений</T>
-          <T v="small" c="muted" style={{ marginTop: 4 }}>Откройте песню в Telegram, нажмите «⋮» → «Поделиться» → «Камертон». Песня добавится в коллекцию с тегами и обложкой и сразу заиграет. Можно выбрать сразу несколько песен.</T>
-          <T v="small" c="muted" style={{ marginTop: 6 }}>Если вместо этого нажать «Сохранить в музыку», Камертон сам найдёт новый файл, когда вы его откроете.</T>
+          <T v="small" c="muted" style={{ marginTop: 4 }}>Откройте песню в Telegram, нажмите «⋮» → «Поделиться» → «Камертон». Песня добавится в коллекцию и сразу заиграет. Можно выбрать сразу несколько песен.</T>
+          <T v="small" c="muted" style={{ marginTop: 6 }}>Telegram передаёт только сам файл: название и обложка, которые видны в чате, вместе с ним не приходят. Если в файле есть теги, Камертон возьмёт их. Если нет — предложит найти песню в каталоге, и название с обложкой подставятся.</T>
+          <T v="small" c="muted" style={{ marginTop: 6 }}>«⋮» → «Сохранить в музыку» сохраняет файл под настоящим именем («Исполнитель - Название»): Камертон найдёт его сам при следующем открытии и возьмёт название из имени.</T>
         </Glass>
+        <ImportLog />
         <SwitchRow title="Добавлять новую музыку с телефона" sub="Песни, сохранённые в память телефона, появятся в коллекции сами. Голосовые сообщения и записи не добавляются" value={autoImport} onChange={(v) => setS({ autoImport: v })} />
       </>}
     </Screen>
+  );
+}
+
+const TITLE_FROM: Record<string, string> = { tags: 'название из тегов файла', file: 'название из имени файла', none: 'без названия', user: 'название указано вами' };
+const COVER_FROM: Record<string, string> = { file: 'обложка из файла', catalog: 'обложка из каталога Deezer', kept: 'обложка прежняя', none: 'без обложки' };
+
+/** Последние присланные и найденные файлы: что пришло и что из этого получилось. */
+function ImportLog() {
+  const v = useUi((u) => u.dataVersion);
+  const q = useQuery({ queryKey: ['import-log', v], queryFn: importLog });
+  if (!q.data?.length) return null;
+  return (
+    <View testID="import-log" style={{ marginTop: 16 }}>
+      <T v="h3">Последние файлы</T>
+      {q.data.slice(0, 8).map((e, i) => (
+        <Row key={`${e.at}-${i}`} title={e.result === 'skipped' ? e.name : `${e.artist} — ${e.title}`}
+          sub={e.result === 'skipped' ? `Не добавлен: ${e.reason}` : `${e.result === 'repeat' ? 'Уже был в коллекции' : `Добавлен (${e.from})`}: ${TITLE_FROM[e.titleFrom ?? 'file']}, ${COVER_FROM[e.coverFrom ?? 'none']}. Файл: ${e.name}${e.size ? `, ${(e.size / 1048576).toFixed(1)} МБ` : ''}`}
+          icon={e.needsInfo ? 'search' : undefined}
+          onPress={e.trackId ? () => router.push({ pathname: '/identify/[id]', params: { id: e.trackId! } }) : undefined} />
+      ))}
+    </View>
   );
 }

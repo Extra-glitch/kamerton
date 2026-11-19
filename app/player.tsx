@@ -138,8 +138,8 @@ function AudioPlayer() {
           <T v="small" c={state === 'clean' || tags.includes('radio_edit') ? 'warn' : state === 'unknown' ? 'faint' : 'muted'}>{explicitLabel(state, tags)}{tags.filter((x) => x !== 'clean' && x !== 'radio_edit').length ? `, ${tags.filter((x) => x !== 'clean' && x !== 'radio_edit').map(versionLabel).join(', ').toLowerCase()}` : ''}</T>
           {src?.attribution ? <T v="small" c="faint">{src.attribution}</T> : null}
           {preview ? <Glass radius={18} style={{ padding: 12, marginTop: 10 }}>
-            {yt ? <Btn testID="play-full-youtube" label="Слушать целиком (YouTube)" icon="play" onPress={() => playVideos([t], 0)} style={{ marginBottom: 10 }} />
-              : <Btn label="Подключить YouTube, чтобы слушать целиком" kind="line" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginBottom: 10 }} />}
+            {yt ? <Btn testID="play-full-youtube" label="Слушать целиком в плеере YouTube" icon="play" onPress={() => playVideos([t], 0)} style={{ marginBottom: 10 }} />
+              : <Btn label="Подключить YouTube: целиком в видимом плеере" kind="line" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginBottom: 10 }} />}
             <T v="small" c="muted">Это фрагмент. Ещё полную песню можно открыть в приложении сервиса:</T>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
               {LISTEN_ELSEWHERE.map((id) => adapter(id)).filter((a) => a?.externalUrl).map((a) => <Chip key={a!.id} icon="link" label={a!.name} onPress={() => { player.pause(); void Linking.openURL(a!.externalUrl!({ title: t.title, artist: t.artist })!); }} />)}

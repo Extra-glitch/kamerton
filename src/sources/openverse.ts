@@ -1,6 +1,9 @@
-// Openverse: открытый поисковик WordPress по музыке под лицензиями Creative Commons
+// Openverse: открытый поисковик WordPress по произведениям под свободными лицензиями
 // (Jamendo, Wikimedia Commons, ccMixter, Freesound и другие). Ключ не нужен.
-// Лицензия каждого трека разрешает слушать и сохранять его, поэтому он играет целиком, в фоне и офлайн.
+// Openverse сам лицензии не проверяет: сведения о лицензии и авторе берутся с сайта-источника,
+// поэтому у каждой песни показываются автор, лицензия, площадка и ссылка на страницу оригинала.
+// Сохранение на телефон включено только там, где площадка сама раздаёт файлы для скачивания:
+// у Jamendo условия API запрещают приложениям хранить песни для офлайна.
 
 import type { RemoteTrack } from '@/core/types';
 import { httpJson, query, RateLimiter } from '@/net/http';
@@ -10,38 +13,55 @@ const BASE = 'https://api.openverse.org/v1';
 // Без регистрации Openverse отдаёт до 20 результатов за запрос и ограничивает частоту запросов.
 const limiter = new RateLimiter(1000);
 const LICENSE: Record<string, string> = { by: 'CC BY', 'by-sa': 'CC BY-SA', 'by-nc': 'CC BY-NC', 'by-nd': 'CC BY-ND', 'by-nc-sa': 'CC BY-NC-SA', 'by-nc-nd': 'CC BY-NC-ND', cc0: 'CC0', pdm: 'общественное достояние', sampling: 'Sampling+', 'nc-sampling': 'NC Sampling+' };
+export const PROVIDER_NAME: Record<string, string> = { jamendo: 'Jamendo', wikimedia_audio: 'Wikimedia Commons', freesound: 'Freesound', ccmixter: 'ccMixter' };
+/** Площадки, которые сами дают скачать файл без входа: только у них разрешено сохранение на телефон. */
+const OFFLINE_PROVIDERS = new Set(['wikimedia_audio', 'ccmixter']);
+
+export function licenseLabel(license: string, version?: string): string {
+  const name = LICENSE[String(license ?? '').toLowerCase()] ?? String(license ?? '').toUpperCase();
+  return `${name}${version && !['cc0', 'pdm'].includes(String(license).toLowerCase()) ? ` ${version}` : ''}`;
+}
 
 export function mapOpenverseAudio(a: any): RemoteTrack | null {
   const url = String(a.url ?? '');
   if (!/^https?:\/\//.test(url)) return null;
-  const lic = LICENSE[String(a.license ?? '').toLowerCase()] ?? String(a.license ?? '').toUpperCase();
+  // Звуковые эффекты, подкасты и озвучка — не песни.
+  if (a.category && a.category !== 'music') return null;
+  const provider = String(a.provider ?? a.source ?? '');
+  const providerName = PROVIDER_NAME[provider] ?? (provider || 'Openverse');
+  const lic = licenseLabel(a.license, a.license_version);
   return {
     source: 'openverse', sourceTrackId: String(a.id), title: String(a.title ?? 'Без названия').trim(), artist: String(a.creator ?? 'Неизвестный автор').trim(),
     album: a.audio_set?.title || undefined, durationSec: a.duration ? Math.round(Number(a.duration) / 1000) : undefined,
     // Openverse помечает «взрослое» содержимое, но не говорит, цензурная ли это версия песни.
     explicit: a.mature ? 'explicit' : 'unknown', tags: Array.isArray(a.genres) ? a.genres.map(String) : [],
-    coverUrl: a.thumbnail || undefined, availability: 'full', canOffline: true,
+    coverUrl: a.thumbnail || undefined, availability: 'full', canOffline: OFFLINE_PROVIDERS.has(provider),
     quality: { codec: a.filetype ? String(a.filetype).toUpperCase() : undefined, bitrateKbps: a.bit_rate ? Math.round(Number(a.bit_rate) / 1000) : undefined },
-    attribution: `${lic}${a.license_version ? ` ${a.license_version}` : ''}, ${a.provider ?? a.source ?? 'Openverse'}`, externalUrl: a.foreign_landing_url || undefined,
-    extra: { stream: url, license: a.license, licenseUrl: a.license_url, provider: a.provider },
+    attribution: `${lic}, ${providerName} (найдено через Openverse)`, externalUrl: a.foreign_landing_url || undefined, licenseUrl: a.license_url || undefined,
+    extra: {
+      stream: url, license: a.license, licenseLabel: lic, licenseUrl: a.license_url || undefined, provider, providerName,
+      creatorUrl: a.creator_url || undefined, landingUrl: a.foreign_landing_url || undefined, category: a.category ?? 'music',
+    },
   };
 }
 
 export const openverse: MusicSourceAdapter = {
   id: 'openverse', name: 'Openverse', category: 'open',
-  capabilities: caps({ playback: 'direct-stream', canBackground: true, canOffline: true, auth: 'none', supportsSearch: true, attributionRequired: true, metadata: { genres: true } }),
+  capabilities: caps({ playback: 'direct-stream', canBackground: true, canOffline: true, offlineScope: 'some', auth: 'none', supportsSearch: true, attributionRequired: true, metadata: { genres: true, license: true } }),
   doc: {
-    summary: 'Музыка под свободными лицензиями из многих открытых каталогов сразу: Jamendo, Wikimedia Commons, ccMixter и другие. Играет целиком, в фоне и сохраняется на телефон.',
+    summary: 'Музыка под свободными лицензиями из нескольких открытых каталогов: Jamendo, Wikimedia Commons, ccMixter и другие. Играет целиком и в фоне. В поиск попадает только музыка: звуковые эффекты и подкасты отсеиваются.',
     limits: [
+      'Openverse не проверяет лицензии: автор и лицензия берутся с сайта-источника. Перед тем как использовать песню где-то ещё, проверьте их на странице оригинала.',
+      'Сохранить на телефон можно только песни с Wikimedia Commons и ccMixter. Песни Jamendo играют только онлайн: условия Jamendo запрещают приложениям хранить их для офлайна.',
       'Здесь в основном независимые музыканты: популярных песен крупных лейблов нет.',
       'Без регистрации: до 20 результатов за запрос и ограничение частоты запросов.',
-      'Некоторые лицензии запрещают коммерческое использование. Для прослушивания и личной копии это не мешает.',
+      'Камертон пользуется Openverse API, но Openverse его не одобрял и не проверял.',
     ],
     unconfirmed: ['Работа из России без VPN не проверена.'],
     setup: ['Ничего настраивать не нужно.'],
-    docsUrl: 'https://api.openverse.org/v1/',
+    docsUrl: 'https://docs.openverse.org/terms_of_service.html',
   },
-  status: async () => ({ state: 'ready', detail: 'Свободная музыка, ключ не нужен' }),
+  status: async () => ({ state: 'ready', detail: 'Свободная музыка, ключ не нужен. Лицензии Openverse не проверяет' }),
   externalUrl: (v) => v.externalUrl ?? null,
   async search(_ctx, q, limit) {
     const out = emptySearch();

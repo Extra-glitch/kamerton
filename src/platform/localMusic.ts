@@ -4,11 +4,11 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { Platform } from 'react-native';
 import { readAudioTags, type AudioTags } from '@/core/audioTags';
 import { parseLyrics } from '@/core/lrc';
-import { md5 } from '@/core/md5';
 import { normalizeText } from '@/core/text';
-import { cleanImportedName, isAudioFile, parseFileName } from '@/import/fileNames';
+import { isAudioFile } from '@/import/fileNames';
+import { trackFromFile, type TitleFrom } from '@/import/localTrack';
 import type { RemoteTrack } from '@/core/types';
-import { cacheLyrics, rawDb, upsertRemote } from '@/db/repo';
+import { cacheLyrics, rawDb, retagTrack, sourceData, upsertRemote } from '@/db/repo';
 
 async function tagsOf(uri: string): Promise<AudioTags | null> {
   let handle: ReturnType<File['open']> | null = null;
@@ -37,31 +37,36 @@ async function saveCover(id: string, pic: NonNullable<AudioTags['picture']>): Pr
   } catch { return undefined; }
 }
 
-export function trackFromFile(name: string, uri: string, durationSec: number | undefined, tags: AudioTags | null, origin?: { from: string; at: number }): RemoteTrack {
-  const fromName = parseFileName(name);
-  const id = md5(uri);
-  // Теги важнее имени файла, но в них тоже бывают имена ботов и адреса сайтов.
-  const title = cleanImportedName(tags?.title) || fromName.title;
-  const artist = cleanImportedName(tags?.artist) || fromName.artist || 'Неизвестный исполнитель';
-  return {
-    source: 'local', sourceTrackId: id, title, artist,
-    album: tags?.album || undefined, trackNumber: tags?.trackNumber, durationSec: tags?.durationSec ?? durationSec, isrc: tags?.isrc || undefined, mbid: tags?.mbid || undefined,
-    explicit: tags?.explicit ?? 'unknown', tags: tags?.genre ?? [], bpm: tags?.bpm, year: tags?.year, availability: 'full', quality: tags?.quality, canOffline: true,
-    extra: { uri, fileName: name, lyrics: tags?.lyrics, importedFrom: origin?.from, importedAt: origin?.at },
-  };
-}
+export { trackFromFile, UNKNOWN_ARTIST, UNKNOWN_TITLE, type TitleFrom } from '@/import/localTrack';
+const TITLE_RANK: Record<TitleFrom, number> = { none: 0, file: 1, tags: 2, user: 3 };
 
-async function addFile(name: string, uri: string, duration?: number, origin?: { from: string; at: number }, cover?: (t: RemoteTrack) => Promise<string | undefined>) {
+export interface AddedFile { trackId: string; title: string; artist: string; titleFrom: TitleFrom; coverFrom: 'file' | 'catalog' | 'none' | 'kept'; needsInfo: boolean; known: boolean }
+
+async function addFile(name: string, uri: string, duration?: number, origin?: { from: string; at: number }, cover?: (t: RemoteTrack) => Promise<string | undefined>): Promise<AddedFile> {
   const tags = await tagsOf(uri);
-  const t = trackFromFile(name, uri, duration, tags, origin);
-  if (tags?.picture) t.coverUrl = await saveCover(t.sourceTrackId, tags.picture);
-  if (!t.coverUrl && cover) t.coverUrl = await cover(t).catch(() => undefined);
+  let t = trackFromFile(name, uri, duration, tags, origin);
+  const prev = await sourceData(`local:${t.sourceTrackId}`);
+  const prevFrom = (prev?.data.extra?.titleFrom as TitleFrom | undefined) ?? 'file';
+  let coverFrom: AddedFile['coverFrom'] = 'none';
+  if (tags?.picture) { t.coverUrl = await saveCover(t.sourceTrackId, tags.picture); if (t.coverUrl) coverFrom = 'file'; }
+  // То, что пользователь указал сам, повторная отправка того же файла не затирает.
+  if (prev && prevFrom === 'user') {
+    t = { ...t, title: prev.data.title, artist: prev.data.artist, album: prev.data.album, coverUrl: t.coverUrl ?? prev.data.coverUrl, extra: { ...t.extra, titleFrom: 'user', needsInfo: false } };
+    if (!t.coverUrl && prev.data.coverUrl) coverFrom = 'kept';
+  }
+  if (!t.coverUrl && cover && !t.extra?.needsInfo) { t.coverUrl = await cover(t).catch(() => undefined); if (t.coverUrl) coverFrom = 'catalog'; }
+  if (!t.coverUrl && prev?.data.coverUrl) { t.coverUrl = prev.data.coverUrl; coverFrom = 'kept'; }
   const trackId = await upsertRemote(t, { library: true, pool: true, localPath: uri });
+  const from = t.extra!.titleFrom as TitleFrom;
+  // Файл уже был, но раньше его название взяли из имени (или его не было), а теперь прочитались теги.
+  if (prev && (TITLE_RANK[from] > TITLE_RANK[prevFrom] || (!prev.data.coverUrl && t.coverUrl))) {
+    await retagTrack(trackId, { title: t.title, artist: t.artist, album: t.album ?? null, coverUrl: t.coverUrl ?? null, titleFrom: from });
+  }
   if (tags?.lyrics) {
     const parsed = parseLyrics(tags.lyrics, 'теги файла');
     if (parsed) await cacheLyrics(trackId, parsed);
   }
-  return trackId;
+  return { trackId, title: t.title, artist: t.artist, titleFrom: from, coverFrom, needsInfo: !!t.extra?.needsInfo, known: !!prev };
 }
 
 export interface ScanProgress { done: number; total: number }
@@ -84,48 +89,64 @@ export async function scanDevice(onProgress?: (p: ScanProgress) => void): Promis
   }
 }
 
-export interface IncomingFile { uri: string; name: string; mime?: string | null }
-export interface ImportResult { trackIds: string[]; skipped: string[] }
+export interface IncomingFile { uri: string; name: string; mime?: string | null; size?: number | null }
+export interface ImportedFile extends AddedFile { name: string; size: number }
+export interface ImportResult { trackIds: string[]; skipped: { name: string; reason: string }[]; files: ImportedFile[] }
+
+const MIME_EXT: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/wav': 'wav', 'audio/x-wav': 'wav' };
+const safeName = (name: string) => name.replace(/[\\/:*?"<>|#%]+/g, '_').slice(-120);
 
 /**
  * Файлы, присланные через «Поделиться» (например, из Telegram) или выбранные вручную.
  * Копия кладётся в папку приложения: ссылка от другого приложения со временем перестаёт работать.
+ * Имя копии — хеш содержимого, поэтому одна и та же песня, присланная дважды, не дублируется.
  */
 export async function importAudioFiles(files: IncomingFile[], from: string, cover?: (t: RemoteTrack) => Promise<string | undefined>): Promise<ImportResult> {
   const dir = new Directory(Paths.document, 'music');
   if (!dir.exists) dir.create({ intermediates: true });
-  const out: ImportResult = { trackIds: [], skipped: [] };
+  const out: ImportResult = { trackIds: [], skipped: [], files: [] };
   const at = Date.now();
   for (const f of files) {
-    if (!isAudioFile(f.mime, f.name)) { out.skipped.push(f.name); continue; }
+    if (!isAudioFile(f.mime, f.name)) { out.skipped.push({ name: f.name, reason: 'не аудиофайл' }); continue; }
     try {
-      const safe = f.name.replace(/[\\/:*?"<>|]+/g, '_').slice(-120) || `audio-${at}.mp3`;
-      let target = new File(dir, safe);
       const src = new File(f.uri);
-      if (target.exists && target.size !== src.size) target = new File(dir, `${at}-${safe}`);
+      if (!src.exists) throw new Error('файл недоступен: приложение-отправитель не дало к нему доступ');
+      const size = src.size ?? 0;
+      if (!size) throw new Error('пустой файл');
+      const ext = (f.name.match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? MIME_EXT[String(f.mime).toLowerCase()] ?? 'mp3').toLowerCase();
+      let hash = '';
+      try { hash = (await src.digest('MD5')).slice(0, 24); } catch { /* без хеша — по имени и времени */ }
+      // Версия 0.4.0 клала копию под исходным именем: если такая есть и совпадает по размеру, берём её.
+      const legacy = new File(dir, safeName(f.name));
+      const target = legacy.exists && legacy.size === size ? legacy : new File(dir, hash ? `${hash}.${ext}` : `${at}-${safeName(f.name) || `audio.${ext}`}`);
       if (!target.exists) await src.copy(target); // копирование асинхронное: теги читаем только после него
-      out.trackIds.push(await addFile(f.name, target.uri, undefined, { from, at }, cover));
+      if (target.size !== size) { try { target.delete(); } catch { /* ничего */ } throw new Error('файл скопировался не полностью'); }
+      const added = await addFile(f.name, target.uri, undefined, { from, at }, cover);
+      out.trackIds.push(added.trackId);
+      out.files.push({ ...added, name: f.name, size });
+      // Временную копию, которую сделал приём «Поделиться», больше не храним.
+      if (src.uri.startsWith(Paths.cache.uri)) { try { src.delete(); } catch { /* не страшно */ } }
     } catch (e) {
       console.warn('Файл не добавлен:', f.name, (e as Error).message);
-      out.skipped.push(f.name);
+      out.skipped.push({ name: f.name, reason: (e as Error).message });
     }
   }
   return out;
 }
 
 /** Новая музыка в памяти телефона с прошлой проверки: например, песни, сохранённые из Telegram в «Музыку» или «Загрузки». */
-export async function scanNewFiles(sinceMs: number, cover?: (t: RemoteTrack) => Promise<string | undefined>): Promise<string[]> {
+export async function scanNewFiles(sinceMs: number, cover?: (t: RemoteTrack) => Promise<string | undefined>): Promise<ImportedFile[]> {
   if (Platform.OS === 'web') return [];
   const perm = await MediaLibrary.getPermissionsAsync(false, ['audio']);
   if (!perm.granted) return [];
-  const ids: string[] = [];
+  const ids: ImportedFile[] = [];
   let after: string | undefined;
   for (let pageNo = 0; pageNo < 10; pageNo++) {
     const page = await MediaLibrary.getAssetsAsync({ mediaType: MediaLibrary.MediaType.audio, first: 100, after, createdAfter: sinceMs, sortBy: [[MediaLibrary.SortBy.creationTime, false]] });
     for (const a of page.assets) {
       // Голосовые сообщения и записи разговоров — не музыка.
       if ((a.duration && a.duration < 45) || /^(ptt|aud|voice|recording|call|запись|голос)/i.test(a.filename) || /\.(amr|3gp|3ga)$/i.test(a.filename)) continue;
-      ids.push(await addFile(a.filename, a.uri, a.duration || undefined, { from: 'память телефона', at: Date.now() }, cover));
+      ids.push({ ...(await addFile(a.filename, a.uri, a.duration || undefined, { from: 'память телефона', at: Date.now() }, cover)), name: a.filename, size: 0 });
     }
     if (!page.hasNextPage) break;
     after = page.endCursor;
@@ -137,14 +158,8 @@ export async function scanNewFiles(sinceMs: number, cover?: (t: RemoteTrack) => 
 export async function pickAudioFiles(): Promise<number> {
   const res = await DocumentPicker.getDocumentAsync({ type: 'audio/*', multiple: true, copyToCacheDirectory: true });
   if (res.canceled) return 0;
-  const dir = new Directory(Paths.document, 'music');
-  if (!dir.exists) dir.create({ intermediates: true });
-  for (const a of res.assets) {
-    const target = new File(dir, a.name);
-    if (!target.exists) await new File(a.uri).copy(target);
-    await addFile(a.name, target.uri, undefined, { from: 'выбор файла', at: Date.now() });
-  }
-  return res.assets.length;
+  const r = await importAudioFiles(res.assets.map((a) => ({ uri: a.uri, name: a.name, mime: a.mimeType })), 'выбор файла');
+  return r.trackIds.length;
 }
 
 export async function searchLocal(q: string, limit: number): Promise<RemoteTrack[]> {

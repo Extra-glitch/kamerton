@@ -11,7 +11,8 @@ import { migrate } from './schema';
 import type { Db, SqlValue } from './types';
 
 let db: Db;
-let choice = { directSources: new Set<string>(), priority: [] as string[], versionFilter: 'original_first' as VersionFilter };
+// disabled — источники, выключенные пользователем: в карточке трека их нет вовсе, поэтому они не играют и не выбираются.
+let choice = { directSources: new Set<string>(), priority: [] as string[], versionFilter: 'original_first' as VersionFilter, disabled: new Set<string>() };
 
 export async function initRepo(driver: Db) {
   db = driver;
@@ -55,7 +56,7 @@ interface TrackRow {
   bpm: number | null; cover_url: string | null; version_tags: string; explicit: string; ml_restricted: number;
   popularity: number | null; preferred_source: string | null; added_at: number;
 }
-interface SourceRow { id: string; track_id: string; data: string; availability: string; local_path: string | null; fetched_at: number }
+interface SourceRow { id: string; track_id: string; source: string; data: string; availability: string; local_path: string | null; fetched_at: number }
 
 function toTrack(r: TrackRow): Track {
   return {
@@ -156,6 +157,7 @@ export async function getViews(ids: string[]): Promise<TrackView[]> {
   }
   const bySource = new Map<string, SourceTrack[]>();
   for (const s of sources) {
+    if (choice.disabled.has(s.source)) continue;
     const list = bySource.get(s.track_id) ?? [];
     list.push(toSource(s));
     bySource.set(s.track_id, list);
@@ -172,6 +174,38 @@ export const getView = async (id: string) => (await getViews([id]))[0] ?? null;
 
 export const setPreferredSource = (trackId: string, sourceTrackId: string | null) =>
   db.run('UPDATE tracks SET preferred_source = ? WHERE id = ?', [sourceTrackId, trackId]);
+
+/** Данные источника по его id (например, «local:<хеш>»), если трек уже есть в базе. */
+export async function sourceData(sourceTrackId: string): Promise<{ trackId: string; data: RemoteTrack } | null> {
+  const row = await db.get<{ track_id: string; data: string }>('SELECT track_id, data FROM source_tracks WHERE id = ?', [sourceTrackId]);
+  return row ? { trackId: row.track_id, data: parse<RemoteTrack>(row.data, {} as RemoteTrack) } : null;
+}
+
+export interface Retag { title: string; artist: string; album?: string | null; coverUrl?: string | null; isrc?: string; titleFrom: 'tags' | 'file' | 'none' | 'user'; coverFrom?: 'file' | 'catalog' | 'none' }
+
+/**
+ * Новое название, исполнитель и обложка у трека и у его файлов на телефоне. Нужен, когда файл пришёл
+ * без тегов (например, из Telegram) или когда пользователь сам выбрал, что это за песня.
+ */
+export async function retagTrack(trackId: string, v: Retag): Promise<void> {
+  const row = await db.get<TrackRow>('SELECT * FROM tracks WHERE id = ?', [trackId]);
+  if (!row) return;
+  const key = canonicalKey({ title: v.title, artist: v.artist, explicit: row.explicit as RemoteTrack['explicit'] });
+  const album = v.album === undefined ? row.album : v.album;
+  const cover = v.coverUrl === undefined ? row.cover_url : v.coverUrl;
+  await db.run(
+    'UPDATE tracks SET title = ?, artist = ?, album = ?, cover_url = ?, isrc = COALESCE(isrc, ?), canonical_key = ?, version_tags = ?, search_text = ? WHERE id = ?',
+    [v.title, v.artist, album ?? null, cover ?? null, v.isrc ?? null, key, JSON.stringify(parseTitle(v.title).versionTags), normalizeText(`${v.title} ${v.artist} ${album ?? ''}`), trackId],
+  );
+  for (const s of await db.all<SourceRow>("SELECT * FROM source_tracks WHERE track_id = ? AND source = 'local'", [trackId])) {
+    const d = parse<RemoteTrack>(s.data, {} as RemoteTrack);
+    const next: RemoteTrack = {
+      ...d, title: v.title, artist: v.artist, album: album ?? undefined, coverUrl: cover ?? undefined,
+      extra: { ...d.extra, titleFrom: v.titleFrom, needsInfo: false, ...(v.coverFrom ? { coverFrom: v.coverFrom } : {}) },
+    };
+    await db.run('UPDATE source_tracks SET data = ? WHERE id = ?', [JSON.stringify(next), s.id]);
+  }
+}
 
 export async function updateTrackIdentifiers(trackId: string, v: { isrc?: string; mbid?: string; tags?: string[]; year?: number }) {
   const t = await db.get<TrackRow>('SELECT * FROM tracks WHERE id = ?', [trackId]);

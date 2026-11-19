@@ -5,12 +5,14 @@ import { sourceContext } from '@/platform/secureConfig';
 import { ADAPTERS, CATEGORY_LABEL, playbackLabel, STATE_LABEL } from '@/sources/registry';
 import type { SourceCategory } from '@/sources/types';
 import { useUi } from '@/state/app';
+import { useSettings } from '@/state/settings';
 import { Row, Screen, T } from '@/ui/kit';
 
 const ORDER: SourceCategory[] = ['own', 'server', 'independent', 'open', 'radio', 'commercial'];
 
 export default function Sources() {
   const v = useUi((u) => u.dataVersion);
+  const off = useSettings((x) => x.disabledSources);
   const q = useQuery({ queryKey: ['sources', v], queryFn: async () => new Map(await Promise.all(ADAPTERS.map(async (a) => [a.id, await a.status(sourceContext)] as const))), staleTime: 0 });
   return (
     <Screen title="Источники музыки">
@@ -20,7 +22,8 @@ export default function Sources() {
           <T v="h2" style={{ marginBottom: 4 }}>{CATEGORY_LABEL[cat]}</T>
           {ADAPTERS.filter((a) => a.category === cat).map((a) => {
             const st = q.data?.get(a.id);
-            return <Row key={a.id} testID={`source-${a.id}`} title={a.name} sub={`${st ? STATE_LABEL[st.state] : '…'}. ${playbackLabel(a)}${st?.detail ? `. ${st.detail}` : ''}`} onPress={() => router.push({ pathname: '/sources/[id]', params: { id: a.id } })} />;
+            const sub = off.includes(a.id) ? 'Выключен в Диагностике: не ищет и не играет' : `${st ? STATE_LABEL[st.state] : '…'}. ${playbackLabel(a)}${st?.detail ? `. ${st.detail}` : ''}`;
+            return <Row key={a.id} testID={`source-${a.id}`} title={a.name} sub={sub} onPress={() => router.push({ pathname: '/sources/[id]', params: { id: a.id } })} />;
           })}
         </View>
       ))}

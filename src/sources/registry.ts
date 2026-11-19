@@ -20,8 +20,13 @@ export const ADAPTERS: MusicSourceAdapter[] = [
   deezer, itunes, yandex, vk, zvuk, youtube, soundcloud, spotify, apple, tidal, bandcamp, youtubeMusic,
 ];
 
+// Источники, выключенные пользователем. Хранятся в настройках, сюда передаются при загрузке и изменении.
+let disabled = new Set<string>();
 const byId = new Map(ADAPTERS.map((a) => [a.id, a]));
-export const adapter = (id: string) => byId.get(id);
+/** Адаптер источника, если пользователь его не выключил. Почти везде нужен именно он. */
+export const adapter = (id: string) => (disabled.has(id) ? undefined : byId.get(id));
+/** Адаптер независимо от выключателя: для экранов настройки и диагностики. */
+export const anyAdapter = (id: string) => byId.get(id);
 export const sourceName = (id: string) => byId.get(id)?.name ?? id;
 
 export const DIRECT_SOURCES = new Set(ADAPTERS.filter((a) => a.capabilities.playback === 'direct-stream' && a.resolveStream).map((a) => a.id));
@@ -45,8 +50,6 @@ export function playbackLabel(a: MusicSourceAdapter): string {
   }
 }
 
-// Источники, выключенные пользователем. Хранятся в настройках, сюда передаются при загрузке и изменении.
-let disabled = new Set<string>();
 export function setDisabledSources(ids: string[]) { disabled = new Set(ids); }
 export const isDisabled = (id: string) => disabled.has(id);
 /** Источники прямого воспроизведения, которые не выключены. */
@@ -95,7 +98,7 @@ export const INTEGRATION_LABEL: Record<IntegrationKind, string> = {
 };
 
 const KIND: Record<string, IntegrationKind> = {
-  local: 'user-import', subsonic: 'own-server', audius: 'authorized-stream', jamendo: 'authorized-stream', openverse: 'authorized-download',
+  local: 'user-import', subsonic: 'own-server', audius: 'authorized-stream', jamendo: 'authorized-stream', openverse: 'authorized-stream',
   archive: 'authorized-download', radio: 'authorized-stream', deezer: 'catalog', itunes: 'catalog', youtube: 'external-player', soundcloud: 'official-api',
   spotify: 'official-api', apple: 'official-sdk',
 };
@@ -105,8 +108,19 @@ export function integrationOf(a: MusicSourceAdapter): IntegrationKind {
 }
 
 /** Что источник реально умеет в Камертоне: найти, сыграть целиком, в фоне, сохранить для офлайна. */
-export function abilities(a: MusicSourceAdapter): { search: boolean; full: boolean; background: boolean; offline: boolean } {
+export interface Abilities {
+  search: boolean;
+  /** Целиком: в плеере Камертона или только в видимом плеере сервиса (YouTube). */
+  full: 'player' | 'visible' | false;
+  background: boolean;
+  /** Сохранение на телефон: у всех песен источника, только у части (зависит от лицензии и площадки) или нет. */
+  offline: 'all' | 'some' | false;
+}
+
+/** Что источник реально умеет в Камертоне: найти, сыграть целиком, в фоне, сохранить для офлайна. */
+export function abilities(a: MusicSourceAdapter): Abilities {
   const p = a.capabilities.playback;
-  const full = p === 'direct-stream' || p === 'visible-embed';
-  return { search: !!a.search && a.capabilities.supportsSearch !== false, full, background: full && p === 'direct-stream' && a.capabilities.canBackground, offline: full && a.capabilities.canOffline };
+  const full = p === 'direct-stream' && a.resolveStream ? 'player' : p === 'visible-embed' ? 'visible' : false;
+  const offline = full === 'player' && a.capabilities.canOffline ? (a.capabilities.offlineScope === 'some' ? 'some' : 'all') : false;
+  return { search: !!a.search && a.capabilities.supportsSearch !== false, full, background: full === 'player' && a.capabilities.canBackground, offline };
 }

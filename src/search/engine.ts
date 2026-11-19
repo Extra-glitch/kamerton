@@ -233,7 +233,7 @@ export async function runSearch(q: string, group: SearchGroup = 'songs'): Promis
 export async function loadMore(providerId?: string): Promise<void> {
   const s = current;
   if (!s) return;
-  const targets = [...s.runs.values()].filter((r) => r.hasMore && (!providerId || r.id === providerId));
+  const targets = [...s.runs.values()].filter((r) => r.hasMore && !isDisabled(r.id) && (!providerId || r.id === providerId));
   if (!targets.length) return;
   useSearch.setState({ done: false });
   await Promise.allSettled(targets.map((r) => {

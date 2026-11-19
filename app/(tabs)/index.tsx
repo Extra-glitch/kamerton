@@ -33,13 +33,15 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const onboarded = useSettings((s) => s.onboarded);
   const discovery = useSettings((s) => s.discovery);
+  const ownMusic = useSettings((s) => s.waveOwnMusic);
   const setS = useSettings((s) => s.set);
   const version = useUi((u) => u.dataVersion + u.playVersion);
   const focused = useIsFocused();
   const seenVersion = useRef(version);
   const inWave = usePlayer((p) => p.context === 'wave' && p.playing);
   const [busy, setBusy] = useState<'wave' | 'surprise' | null>(null);
-  const q = useQuery({ queryKey: ['home', onboarded], queryFn: loadHome, enabled: onboarded, staleTime: 120_000 });
+  const off = useSettings((s) => s.disabledSources);
+  const q = useQuery({ queryKey: ['home', onboarded, ownMusic, off.join(',')], queryFn: loadHome, enabled: onboarded, staleTime: 120_000 });
   // Лента не перестраивается под пальцами: обновляем её, когда пользователь возвращается на экран.
   useEffect(() => {
     if (focused && seenVersion.current !== version) { seenVersion.current = version; void q.refetch(); }
@@ -69,7 +71,7 @@ export default function Home() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
             <View style={{ flex: 1 }}>
               <T v="poster" numberOfLines={1} adjustsFontSizeToFit>{busy === 'wave' ? 'Ловим…' : 'Волна'}</T>
-              <T v="small" c="muted" numberOfLines={2} style={{ marginTop: 4 }}>{next ? `Дальше: ${next.artist} — ${next.title}` : 'Музыка под ваш вкус, бесконечно'}</T>
+              <T v="small" c={d?.waveError && !next ? 'warn' : 'muted'} numberOfLines={3} style={{ marginTop: 4 }}>{next ? `Дальше: ${next.artist} — ${next.title}` : d?.waveError ?? 'Музыка под ваш вкус, бесконечно'}</T>
             </View>
             <PlayOrb testID="wave-play" label={inWave ? 'Пауза' : 'Включить волну'} playing={inWave} busy={busy === 'wave'} onPress={() => void launch('wave')} />
           </View>
@@ -78,6 +80,13 @@ export default function Home() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
               <T v="small" c="faint">Знакомое</T><T v="small" c="accent">{mode.label}</T><T v="small" c="faint">Новое</T>
             </View>
+            {/* Откуда волна берёт музыку: видно, если свои файлы подмешиваются или интернет-источников нет. */}
+            <T testID="wave-sources" v="small" c="faint" style={{ marginTop: 8 }}>
+              {d?.waveSources.length ? `Из интернета: ${d.waveSources.join(', ')}.` : 'Интернет-источников для волны нет.'}{' '}
+              <T v="small" c="accent" accessibilityRole="switch" accessibilityState={{ checked: ownMusic }} onPress={() => setS({ waveOwnMusic: !ownMusic })}>
+                {ownMusic ? 'Ваши файлы тоже в волне' : 'Ваши файлы не подмешиваются'}
+              </T>
+            </T>
           </View>
         </Glass>
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>

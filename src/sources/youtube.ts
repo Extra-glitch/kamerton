@@ -8,7 +8,7 @@ import { caps, emptySearch, type MusicSourceAdapter, type SourceContext } from '
 export const youtube: MusicSourceAdapter = {
   id: 'youtube', name: 'YouTube', category: 'commercial',
   capabilities: caps({ playback: 'visible-embed', requiresVisiblePlayer: true, auth: 'apiKey', supportsDeepLink: true, supportsSearch: true }),
-  configFields: [{ key: 'apiKey', label: 'Ключ YouTube Data API', secret: true, required: true, hint: 'Бесплатный ключ из Google Cloud. С ним YouTube ищет песни и играет их в приложении.' }],
+  configFields: [{ key: 'apiKey', label: 'Ключ YouTube Data API', secret: true, required: true, hint: 'Бесплатный ключ из Google Cloud. Он нужен для поиска. Песни играют в видимом плеере YouTube: ключ не даёт права скачивать, извлекать звук (MP3) или слушать в фоне.' }],
   doc: {
     summary: 'Поиск песен и клипов на YouTube и прослушивание целиком во встроенном плеере YouTube. Песни, найденные в каталоге Deezer или Apple, тоже играют целиком: их полная версия ищется на YouTube при нажатии.',
     limits: [
@@ -16,6 +16,8 @@ export const youtube: MusicSourceAdapter = {
       'Видео играет со своим звуком, плеер Камертона на это время ставится на паузу.',
       'По правилам YouTube плеер должен быть виден: при сворачивании видео останавливается, фона и экрана блокировки нет.',
       'Скачивать видео и звук с YouTube правила запрещают, поэтому сохранения на телефон нет.',
+      'Бесплатный ключ API — это доступ к поиску, а не разрешение на скачивание, извлечение звука (MP3) или фоновое воспроизведение.',
+      'Камертон пользуется сервисами YouTube API. Политика конфиденциальности Google: google.com/policies/privacy.',
       'Бесплатный ключ даёт около 100 поисков в сутки. Поиск полной версии для песни из каталога тоже тратит один поиск, но только в первый раз: найденное запоминается.',
     ],
     unconfirmed: ['Работа встроенного плеера на телефоне не проверена.'],
@@ -29,7 +31,7 @@ export const youtube: MusicSourceAdapter = {
     ],
     docsUrl: 'https://developers.google.com/youtube/iframe_api_reference',
   },
-  status: async (ctx) => ((await ctx.getConfig('youtube')).apiKey ? { state: 'ready', detail: 'Поиск и прослушивание, в России нужен VPN' } : { state: 'needs_setup', detail: 'Нужен бесплатный ключ YouTube' }),
+  status: async (ctx) => ((await ctx.getConfig('youtube')).apiKey ? { state: 'ready', detail: 'Поиск и видимый плеер, без фона и скачивания. В России нужен VPN' } : { state: 'needs_setup', detail: 'Нужен бесплатный ключ YouTube' }),
   async search(ctx, q, limit, page = 0) {
     const out = emptySearch();
     const r = await searchYouTube(ctx, q, Math.min(limit, 25), page);

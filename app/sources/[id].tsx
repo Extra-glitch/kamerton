@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, Switch, View } from 'react-native';
 import { friendlyError } from '@/net/http';
 import { spotifyLogin } from '@/platform/oauth';
 import { sourceContext as ctx } from '@/platform/secureConfig';
-import { adapter, playbackLabel, STATE_LABEL } from '@/sources/registry';
+import { abilities, anyAdapter, playbackLabel, STATE_LABEL } from '@/sources/registry';
 import { refreshYouTubeReady } from '@/services/fullVersion';
 import { bumpData, toast } from '@/state/app';
+import { useSettings } from '@/state/settings';
+import { useColors } from '@/ui/theme';
 import { Btn, Field, Notice, Screen, T } from '@/ui/kit';
 
 function Bullets({ title, items }: { title: string; items: string[] }) {
@@ -17,7 +19,11 @@ function Bullets({ title, items }: { title: string; items: string[] }) {
 
 export default function SourceDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const a = adapter(id);
+  const a = anyAdapter(id);
+  const c = useColors();
+  const disabledList = useSettings((x) => x.disabledSources);
+  const setS = useSettings((x) => x.set);
+  const on = !disabledList.includes(id);
   const [values, setValues] = useState<Record<string, string>>({});
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,7 +31,10 @@ export default function SourceDetail() {
   useEffect(() => { void ctx.getConfig(id).then(setValues); }, [id]);
   if (!a) return <Screen title="Источник не найден">{null}</Screen>;
   const cap = a.capabilities;
-  const can = [cap.supportsSearch && 'поиск', cap.supportsDiscovery && 'рекомендации', cap.supportsPlaylistImport && 'импорт плейлистов', cap.supportsLibraryImport && 'импорт библиотеки', cap.canOffline && 'сохранение на телефон', cap.canBackground && 'фоновое воспроизведение', cap.supportsDeepLink && 'открытие в сервисе'].filter(Boolean).join(', ');
+  const ab = abilities(a);
+  // Только то, что действительно работает в Камертоне, а не всё, что умеет сервис.
+  const can = [ab.search && 'поиск', ab.full === 'player' && 'прослушивание целиком', ab.full === 'visible' && 'прослушивание в видимом плеере сервиса', cap.supportsDiscovery && 'рекомендации', cap.supportsPlaylistImport && 'импорт плейлистов', cap.supportsLibraryImport && 'импорт библиотеки', ab.offline === 'all' && 'сохранение на телефон', ab.offline === 'some' && 'сохранение на телефон для песен, где это разрешено', ab.background && 'фоновое воспроизведение', cap.supportsDeepLink && 'открытие в сервисе'].filter(Boolean).join(', ');
+  const cannot = [ab.full !== 'player' && 'фон', !ab.offline && 'сохранение на телефон'].filter(Boolean).join(', ');
   const needs = [cap.requiresBackend && 'свой сервер', cap.requiresUserSubscription && 'подписка', cap.requiresOfficialApp && 'официальное приложение'].filter(Boolean).join(', ');
   const save = async () => { const clean: Record<string, string> = {}; for (const f of a.configFields ?? []) clean[f.key] = (values[f.key] ?? '').trim(); await ctx.setConfig(id, clean); };
   const check = async () => {
@@ -35,10 +44,16 @@ export default function SourceDetail() {
   };
   return (
     <Screen title={a.name}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <T v="strong" style={{ flex: 1 }}>{on ? 'Источник включён' : 'Источник выключен: не ищет и не играет'}</T>
+        <Switch testID="source-enabled" accessibilityLabel={`${a.name}: ${on ? 'включён' : 'выключен'}`} value={on} trackColor={{ true: c.accent, false: c.line }} thumbColor={on ? c.onAccent : c.muted}
+          onValueChange={(v) => setS({ disabledSources: v ? disabledList.filter((x) => x !== id) : [...new Set([...disabledList, id])] })} />
+      </View>
       <T>{a.doc.summary}</T>
       <T v="title" style={{ marginTop: 14 }}>{st.data ? STATE_LABEL[st.data.state] : ''}</T>
       <T v="small" c="muted">{playbackLabel(a)}{st.data?.detail ? `. ${st.data.detail}` : ''}</T>
       {can ? <T v="small" c="muted" style={{ marginTop: 4 }}>Доступно: {can}.</T> : null}
+      {cannot && ab.search ? <T v="small" c="muted">Недоступно: {cannot}.</T> : null}
       {needs ? <T v="small" c="warn">Требуется: {needs}.</T> : null}
       {a.configFields ? <View style={{ marginTop: 20 }}>
         {a.configFields.map((f) => <Field key={f.key} label={f.label} hint={f.hint} placeholder={f.placeholder} secureTextEntry={f.secret} autoCapitalize="none" autoCorrect={false} value={values[f.key] ?? ''} onChangeText={(t) => setValues((v) => ({ ...v, [f.key]: t }))} />)}

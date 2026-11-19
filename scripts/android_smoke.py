@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import xml.etree.ElementTree as ET
 
 PACKAGE = "app.kamerton.player"
@@ -290,7 +291,8 @@ def scenario():
     else:
         ok, st = False, []
     screenshot("05-wave")
-    record("Волна играет из интернета", ok, json.dumps(st, ensure_ascii=False), required=False)
+    why = [t for t in seen_texts[-40:] if "олн" in t and len(t) > 30]
+    record("Волна играет из интернета, а не файлы с телефона", ok, json.dumps(st, ensure_ascii=False) + (f" | {why[-1]}" if why and not ok else ""), required=False)
     mini = find(screen(), "Открыть плеер", exact=False)
     if mini:
         tap(mini)
@@ -300,7 +302,9 @@ def scenario():
         time.sleep(1)
     shell("input keyevent KEYCODE_MEDIA_PAUSE")
     share_check()
+    telegram_checks()
     catalog_checks()
+    switch_checks()
 
 
 def share_check():
@@ -316,6 +320,154 @@ def share_check():
     record("Файл через «Поделиться» добавляется и играет", ok, json.dumps(st, ensure_ascii=False), required=False)
     shell("input keyevent KEYCODE_MEDIA_PAUSE")
     time.sleep(1)
+
+
+# ---------- Файлы как из Telegram ----------
+# Telegram при «Поделиться» отдаёт файл из своего кэша через собственный FileProvider с именем
+# «<номер сервера>_<номер документа>.mp3» и без названия из чата. Здесь то же самое делает
+# FileProvider самого Камертона: файл кладётся в его кэш и отправляется обычным SEND-интентом.
+PROVIDER = f"content://{PACKAGE}.FileSystemFileProvider/cached_expo_files"
+TG_NAME = "2_5341234123412341234.mp3"
+CP_NAME = "Земфира - Искала #2 (@TgSoundBot).mp3"
+CP_TITLE, CP_ARTIST = "Искала (тест)", "Земфира (тест)"
+BIG_TITLE = "Big Test File"
+
+
+def id3v23(frames):
+    body = b"".join(fid.encode() + len(data).to_bytes(4, "big") + b"\x00\x00" + data for fid, data in frames)
+    n = len(body)
+    return b"ID3\x03\x00\x00" + bytes([(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]) + body
+
+
+def bare_mp3(path, seconds, freq, bitrate="96k"):
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"sine=frequency={freq}:duration={seconds}", "-c:a", "libmp3lame", "-b:a", bitrate,
+                    "-map_metadata", "-1", "-id3v2_version", "0", "-write_xing", "0", path], check=True)
+
+
+def to_app_cache(local, name):
+    """Кладёт файл в кэш приложения (как Telegram держит файлы у себя) и возвращает content://-адрес."""
+    adb("push", local, "/data/local/tmp/share.bin", timeout=300)
+    safe = name.replace('"', "")
+    shell(f"cat /data/local/tmp/share.bin | run-as {PACKAGE} sh -c 'mkdir -p cache/tg && cat > \"cache/tg/{safe}\"'", timeout=300)
+    return f"{PROVIDER}/tg/{urllib.parse.quote(name)}"
+
+
+def send(uri, mime="audio/mpeg"):
+    shell(f"am start -a android.intent.action.SEND -t {mime} --eu android.intent.extra.STREAM '{uri}' -n {PACKAGE}/.MainActivity", check=False)
+
+
+def telegram_checks():
+    tmp = tempfile.mkdtemp()
+    # 1. Как из Telegram: служебное имя, тегов нет, приложение закрыто (холодный запуск).
+    bare_mp3(f"{tmp}/tg.mp3", 120, 520)
+    uri = to_app_cache(f"{tmp}/tg.mp3", TG_NAME)
+    shell(f"am force-stop {PACKAGE}")
+    time.sleep(2)
+    send(uri)
+    ok, st = wait_session(is_playing, 60)
+    ask = wait("Что это за песня?", 30)
+    screenshot("06c-telegram-untitled")
+    record("Песня из Telegram без тегов играет, приложение просит указать название", ok and ask and not any(re.search(r"\d{6,}", s["title"]) for s in st), json.dumps(st, ensure_ascii=False), required=False)
+    if ask:
+        named = False
+        if type_into("Исполнитель и название", "Zemfira Iskala"):
+            hit = None
+            end = time.time() + 40
+            while time.time() < end and not hit:
+                hit = next((n for n in screen() if ("Zemfira" in n["desc"] or "Земфира" in n["desc"]) and "—" in n["desc"]), None)
+                time.sleep(1.5)
+            screenshot("06d-identify-results")
+            if hit:
+                shell("input keyevent 4")  # спрятать клавиатуру
+                time.sleep(1)
+                hit = next((n for n in screen() if ("Zemfira" in n["desc"] or "Земфира" in n["desc"]) and "—" in n["desc"]), hit)
+                tap(hit, "найденная песня")
+                named, st = wait_session(lambda s: ("Искала" in s["title"] or "Iskala" in s["title"]), 20)
+                record("Название и обложка подставляются из каталога", named, json.dumps(st, ensure_ascii=False), required=False)
+        if not named:
+            if find(screen(), "Что это за песня?") or wait("Что это за песня?", 5):
+                type_into("Название песни", "Manual Title")
+                type_into("Кто исполняет", "Manual Artist")
+                shell("input keyevent 4")
+                save = scroll_to_part("Сохранить название")
+                if save:
+                    tap(save)
+                ok2, st = wait_session(lambda s: "Manual Title" in s["title"], 20)
+                record("Название вписывается вручную и сразу видно в уведомлении", ok2, json.dumps(st, ensure_ascii=False), required=False)
+        time.sleep(2)
+        screenshot("06e-identified")
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+
+    # 2. Теги в Windows-1251, обложка в файле, имя с пробелами, кириллицей и «#».
+    bare_mp3(f"{tmp}/cp.mp3", 120, 600)
+    cover = f"{tmp}/cover.jpg"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=0xE0457B:s=300x300", "-frames:v", "1", cover], check=True)
+    tag = id3v23([("TIT2", b"\x00" + CP_TITLE.encode("cp1251")), ("TPE1", b"\x00" + CP_ARTIST.encode("cp1251")),
+                  ("APIC", b"\x00image/jpeg\x00\x03\x00" + open(cover, "rb").read())])
+    open(f"{tmp}/cp-tagged.mp3", "wb").write(tag + open(f"{tmp}/cp.mp3", "rb").read())
+    uri = to_app_cache(f"{tmp}/cp-tagged.mp3", CP_NAME)
+    send(uri)
+    ok, st = wait_session(lambda s: is_playing(s) and CP_TITLE in s["title"] and CP_ARTIST in s["title"], 45)
+    time.sleep(1.5)
+    screenshot("06f-cp1251-cover")
+    record("Теги в Windows-1251 и имя с пробелами, кириллицей и # читаются", ok, json.dumps(st, ensure_ascii=False), required=False)
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    time.sleep(1)
+
+    # 3. Та же песня ещё раз: дубликата быть не должно.
+    send(to_app_cache(f"{tmp}/cp-tagged.mp3", CP_NAME))
+    repeat = wait("уже есть", 25, exact=False)
+    record("Повторная отправка той же песни не создаёт дубликат", repeat, required=False)
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+
+    # 4. Большой файл: 25 минут в 320 кбит/с, около 60 МБ.
+    big = f"{tmp}/big.mp3"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=700:duration=1500", "-c:a", "libmp3lame", "-b:a", "320k",
+                    "-metadata", f"title={BIG_TITLE}", "-metadata", "artist=Kamerton QA", "-id3v2_version", "3", big], check=True)
+    mb = os.path.getsize(big) / 1048576
+    send(to_app_cache(big, "big file.mp3"))
+    ok, st = wait_session(lambda s: is_playing(s) and BIG_TITLE in s["title"], 120)
+    record(f"Большой файл ({mb:.0f} МБ) добавляется и играет", ok, json.dumps(st, ensure_ascii=False), required=False)
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    time.sleep(1)
+
+    # 5. Журнал импорта: видно, откуда название и обложка.
+    shell(f"am start -a android.intent.action.VIEW -d 'kamerton://import' -n {PACKAGE}/.MainActivity", check=False)
+    log = wait("Последние файлы", 20) or scroll_to("Последние файлы")
+    if log:
+        scroll_to_part("обложка", attempts=4)
+    time.sleep(1)
+    screenshot("06g-import-log")
+    texts = " | ".join(seen_texts[-80:])
+    record("Журнал импорта показывает, откуда название и обложка", log and "обложка из файла" in texts and "Уже был в коллекции" in texts, required=False)
+    shell("input keyevent KEYCODE_BACK")
+    time.sleep(1)
+
+
+def switch_checks():
+    """Выключатель источника: выключенный не ищется, включённый снова находится."""
+    def search_local(q):
+        shell(f"am start -a android.intent.action.VIEW -d 'kamerton://search?q={urllib.parse.quote(q)}' -n {PACKAGE}/.MainActivity", check=False)
+        time.sleep(1)
+        # Строка результата подписана «Название, Исполнитель, как играет»; мини-плеер — «Открыть плеер: …».
+        return wait(f"{BIG_TITLE}, Kamerton QA", 25, exact=False)
+
+    def toggle(state_from):
+        shell(f"am start -a android.intent.action.VIEW -d 'kamerton://diagnostics' -n {PACKAGE}/.MainActivity", check=False)
+        sw = wait(f"На телефоне: {state_from}", 25, exact=False)
+        if sw:
+            tap(sw)
+            time.sleep(1.5)
+        return sw
+
+    before = search_local("Big Test")
+    off = toggle("включён")
+    gone = not search_local("Big Test F") if off else False
+    screenshot("11-switch-off")
+    on = toggle("выключен")
+    back = search_local("Big Test File") if on else None
+    record("Выключенный источник не участвует в поиске, после включения снова находится", before and off and gone and on and back,
+           f"до: {bool(before)}, выключен: {bool(off)}, пропал: {gone}, включён: {bool(on)}, вернулся: {bool(back)}", required=False)
 
 
 def type_into(field_label, text):

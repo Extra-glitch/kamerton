@@ -377,7 +377,17 @@ export class PlayerController {
     await this.loadWindow(this.snap.positionSec, this.snap.playing);
   }
 
-  invalidate(trackId: string) { this.views.delete(trackId); void this.remember([{ qid: '', trackId, sourceTrackId: '' }]).then(() => this.publish()); }
+  invalidate(trackId: string) {
+    this.views.delete(trackId);
+    void this.remember([{ qid: '', trackId, sourceTrackId: '' }]).then(() => {
+      // Новое название или обложка сразу видны на экране блокировки и в шторке уведомлений.
+      if (this.queue.current?.trackId === trackId) this.announce();
+      this.publish();
+    });
+  }
+
+  /** Сбрасывает всё запомненное о треках: например, после выключения источника. */
+  invalidateAll() { this.views.clear(); void this.remember(this.queue.items).then(() => this.publish()); }
 
   setSleepTimer(minutes: number | null) {
     if (this.sleepTimer) clearTimeout(this.sleepTimer);

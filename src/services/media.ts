@@ -11,7 +11,7 @@ import { matchAll, type ImportRow } from '@/import/pipeline';
 import { musicBrainz } from '@/meta/musicbrainz';
 import { friendlyError, httpJson, query } from '@/net/http';
 import { sourceContext as ctx } from '@/platform/secureConfig';
-import { ADAPTERS, adapter, CATALOG_SOURCES, DIRECT_SOURCES, isPlayableHere, playMode, readySources } from '@/sources/registry';
+import { ADAPTERS, adapter, CATALOG_SOURCES, DIRECT_SOURCES, isDisabled, isPlayableHere, playMode, readySources } from '@/sources/registry';
 import type { AlbumRef, ArtistRef, MusicSourceAdapter, PlaylistRef, QualityPreference } from '@/sources/types';
 import { cachedSearch } from '@/search/engine';
 import { deezerArtist } from '@/sources/deezer';
@@ -98,6 +98,7 @@ export async function searchLink(url: string): Promise<{ title: string; tracks: 
   if (/music\.yandex\.|vk\.(com|ru)\/(music|audio)|zvuk\.com/i.test(u)) throw new Error('Яндекс Музыка, VK и Звук не дают сторонним приложениям читать свои страницы. Перенесите список через «Импорт».');
   const a = ADAPTERS.find((x) => x.canHandleLink?.(u) && x.resolveLink);
   if (!a) throw new Error('Такие ссылки пока не поддерживаются. Работают SoundCloud, YouTube, Deezer, Audius и Internet Archive.');
+  if (isDisabled(a.id)) throw new Error(`${a.name} выключен в Диагностике источников. Включите его, чтобы открыть эту ссылку.`);
   const st = await a.status(ctx);
   // Ссылки SoundCloud и YouTube открываются и без ключа: во встроенном плеере самого сервиса.
   const keyless = a.id === 'soundcloud' || a.id === 'youtube';
@@ -246,9 +247,10 @@ export async function loadVideo(track: TrackView): Promise<MusicVideo | null> {
   if (track.mbid && settings().musicBrainzEnabled) {
     try {
       const rec = await musicBrainz.details(track.mbid);
-      if (rec.youtubeIds[0]) found = { provider: 'youtube', videoId: rec.youtubeIds[0], origin: 'MusicBrainz' };
+      if (rec.youtubeIds[0] && !isDisabled('youtube')) found = { provider: 'youtube', videoId: rec.youtubeIds[0], origin: 'MusicBrainz' };
     } catch { /* идём дальше */ }
   }
+  if (!found && isDisabled('youtube')) return null; // клипы показываются только плеером YouTube
   found ??= await findVideo(ctx, primaryArtist(track.artist), track.title).catch(() => null);
   if (found) await repo.setVideo(track.id, found);
   return found;

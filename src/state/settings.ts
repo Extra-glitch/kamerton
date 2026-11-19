@@ -22,6 +22,8 @@ export interface Settings {
   disabledSources: string[];
   /** Сам добавлять новую музыку, появившуюся в памяти телефона (например, сохранённую из Telegram). */
   autoImport: boolean;
+  /** Подмешивать в волну свои файлы и свой сервер. По умолчанию волна берёт музыку из интернет-источников. */
+  waveOwnMusic: boolean;
   qualityWifi: QualityPreference;
   qualityCell: QualityPreference;
   fade: boolean;
@@ -38,7 +40,7 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
-  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true, glassBlur: false, disabledSources: [], autoImport: true,
+  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true, glassBlur: false, disabledSources: [], autoImport: true, waveOwnMusic: false,
   qualityWifi: 'lossless', qualityCell: 'normal', fade: false, volume: 1, recordHistory: true, videoEnabled: true, lrclibEnabled: false,
   musicBrainzEnabled: true, listenBrainzEnabled: true, dailyNotification: false, seedTags: [], seedArtists: [], sourcePriority: DEFAULT_PRIORITY,
 };
@@ -58,14 +60,14 @@ export const useSettings = create<Store>((set, get) => ({
     const saved = await kvGet<Partial<Settings>>('settings', {});
     const next = { ...DEFAULTS, ...saved };
     setDisabledSources(next.disabledSources);
-    setSourceChoice({ directSources: enabledDirect(), priority: next.sourcePriority, versionFilter: next.versionFilter });
+    setSourceChoice({ directSources: enabledDirect(), priority: next.sourcePriority, versionFilter: next.versionFilter, disabled: new Set(next.disabledSources) });
     set({ ...next, loaded: true });
   },
   set(patch) {
     set(patch);
     const s = pick(get());
     setDisabledSources(s.disabledSources);
-    setSourceChoice({ directSources: enabledDirect(), priority: s.sourcePriority, versionFilter: s.versionFilter });
+    setSourceChoice({ directSources: enabledDirect(), priority: s.sourcePriority, versionFilter: s.versionFilter, disabled: new Set(s.disabledSources) });
     void kvSet('settings', s);
   },
 }));

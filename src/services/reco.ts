@@ -1,12 +1,12 @@
 // Связывает алгоритмы рекомендаций с базой и источниками.
 
-import type { Recommendation, RemoteTrack, TrackView } from '@/core/types';
+import type { Recommendation, RemoteTrack, SourceTrack, TrackView } from '@/core/types';
 import { similarity } from '@/core/text';
 import * as repo from '@/db/repo';
 import { musicBrainz } from '@/meta/musicbrainz';
 import { sourceContext as ctx } from '@/platform/secureConfig';
 import { artistKey, buildProfile, buildWave, scoreTrack, seededRng, similarTo, surprise, type Profile, type SimilarResult } from '@/reco/engine';
-import { ADAPTERS, adapter, readySources } from '@/sources/registry';
+import { ADAPTERS, adapter, isPlayableHere, readySources } from '@/sources/registry';
 import type { DiscoverRequest } from '@/sources/types';
 import { settings } from '@/state/settings';
 import { relatedArtists } from '@/meta/listenbrainz';
@@ -72,21 +72,59 @@ async function waveOptions(exclude: string[]) {
   return { discovery: s.discovery, bandit: await repo.getBandit(), versionFilter: s.versionFilter, exclude: new Set(exclude) };
 }
 
+/** Свои файлы и свой сервер. Волна берёт их, только если пользователь сам это разрешил. */
+const OWN_SOURCES = new Set(['local', 'subsonic']);
+
+/**
+ * Кандидаты для волны, «Удиви меня» и открытий дня: только включённые источники, которые играют здесь.
+ * Если у песни есть и файл на телефоне, и интернет-источник, без разрешения берётся интернет-источник.
+ */
+export function wavePool(pool: TrackView[], ownMusic: boolean): TrackView[] {
+  const ok = (s: SourceTrack) => isPlayableHere(s) && !s.isLive && (ownMusic || !OWN_SOURCES.has(s.source));
+  const out: TrackView[] = [];
+  for (const t of pool) {
+    if (t.preferred && ok(t.preferred)) { out.push(t); continue; }
+    const alt = t.sources.find(ok);
+    if (alt) out.push({ ...t, preferred: alt });
+  }
+  return out;
+}
+
+/** Волна не нашла песен. Текст объясняет почему: волна не подменяет интернет молча своими файлами. */
+export class WaveError extends Error {}
+
+async function waveFailure(failed: PoolResult['failed']): Promise<string> {
+  const online = await readySources(ctx, (a) => !!a.discover && !OWN_SOURCES.has(a.id));
+  if (!online.length) return 'Для волны нет включённых интернет-источников. Включите Audius или Архив в Диагностике источников.';
+  if (failed.length) return `Интернет-источники волны не ответили: ${failed.map((f) => `${f.source} — ${f.message}`).join('; ')}. Проверьте интернет и попробуйте ещё раз.`;
+  return 'Новых песен для волны пока нет: всё подходящее звучало недавно. Попробуйте позже или сдвиньте ползунок к «Новому».';
+}
+
 export async function nextWave(count = 15, exclude: string[] = [], recentArtists: string[] = [], record = true): Promise<PlayItem[]> {
-  await refreshPool();
+  let failed = (await refreshPool()).failed;
+  const own = settings().waveOwnMusic;
   let input = await loadReco();
-  let recs = buildWave(input.pool, input.profile, { ...(await waveOptions(exclude)), count, recentArtists });
+  let recs = buildWave(wavePool(input.pool, own), input.profile, { ...(await waveOptions(exclude)), count, recentArtists });
   if (recs.length < Math.min(5, count)) {
     const r = await refreshPool(true);
-    if (r.added) { input = await loadReco(true); recs = buildWave(input.pool, input.profile, { ...(await waveOptions(exclude)), count, recentArtists }); }
+    failed = r.failed;
+    if (r.added) { input = await loadReco(true); recs = buildWave(wavePool(input.pool, own), input.profile, { ...(await waveOptions(exclude)), count, recentArtists }); }
   }
+  if (!recs.length) throw new WaveError(await waveFailure(failed));
   if (record) await log(recs, 'wave');
   return toItems(recs);
 }
 
+/** Откуда волна сейчас берёт музыку: для подписи на главной. */
+export async function waveSources(): Promise<string[]> {
+  const online = await readySources(ctx, (a) => !!a.discover && !OWN_SOURCES.has(a.id));
+  return online.map((a) => a.name);
+}
+
 export async function surpriseMe(count = 12, exclude: string[] = []): Promise<PlayItem[]> {
   await refreshPool();
-  const { pool, profile } = await loadReco();
+  const { pool: all, profile } = await loadReco();
+  const pool = wavePool(all, settings().waveOwnMusic);
   const recs = surprise(pool, profile, await waveOptions(exclude), count);
   await log(recs, 'surprise');
   return toItems(recs);
@@ -100,7 +138,8 @@ export async function dailyDiscoveries(count = 7): Promise<PlayItem[]> {
   const saved = await repo.getDailyPicks(day);
   if (saved.length) return saved.map((p) => ({ trackId: p.track_id, sourceTrackId: p.source_track_id, reason: p.reason, bucket: p.bucket }));
   await refreshPool();
-  const { pool, profile } = await loadReco();
+  const { pool: all, profile } = await loadReco();
+  const pool = wavePool(all, settings().waveOwnMusic);
   const seed = day.split('-').reduce((a, x) => a * 31 + Number(x), 7);
   const recs = buildWave(pool, profile, { ...(await waveOptions([])), count, discovery: 0.9, rng: seededRng(seed), onlyBuckets: ['new_for_you', 'fresh', 'rare', 'new_artist'] });
   if (recs.length) await repo.setDailyPicks(day, recs.map((r) => ({ trackId: r.trackId, sourceTrackId: r.sourceTrackId, bucket: r.bucket, reason: r.reason })));
@@ -147,7 +186,7 @@ export interface HomeData {
   wave: PlayItem[]; waveTracks: TrackView[]; daily: TrackView[]; dailyReasons: Map<string, string>; recent: TrackView[]; artists: { name: string; cover?: string }[];
   albums: { source: string; id: string; title: string; artist: string; cover?: string; reason: string }[];
   fresh: TrackView[]; likeRecent: { title: string; tracks: TrackView[] } | null; mixes: { tag: string; tracks: TrackView[] }[]; genrePopular: TrackView[];
-  poolErrors: PoolResult['failed']; poolSize: number; interactions: number;
+  poolErrors: PoolResult['failed']; poolSize: number; interactions: number; waveError: string | null; waveSources: string[];
 }
 
 export async function loadHome(): Promise<HomeData> {
@@ -157,7 +196,8 @@ export async function loadHome(): Promise<HomeData> {
   const poolResult: PoolResult = have >= 15 ? { added: 0, failed: [] } : await refreshPool();
   if (have >= 15) void refreshPool().catch(() => undefined);
   const dailyItems = await dailyDiscoveries();
-  const wave = await nextWave(6, [], [], false); // это предпросмотр, в журнал он не идёт
+  let waveError: string | null = null;
+  const wave = await nextWave(6, [], [], false).catch((e) => { waveError = (e as Error).message; return [] as PlayItem[]; }); // предпросмотр, в журнал не идёт
   const { pool, profile, tracks } = await loadReco();
   const recentIds = await repo.recentPlayedIds(12);
   const recent = recentIds.map((id) => tracks.get(id)).filter((t): t is TrackView => !!t);
@@ -193,6 +233,7 @@ export async function loadHome(): Promise<HomeData> {
     wave, waveTracks: wave.map((w) => tracks.get(w.trackId)).filter((t): t is TrackView => !!t),
     daily: dailyItems.map((d) => tracks.get(d.trackId)).filter((t): t is TrackView => !!t), dailyReasons: new Map(dailyItems.map((d) => [d.trackId, d.reason])),
     recent, artists, albums, fresh, likeRecent, mixes, genrePopular, poolErrors: poolResult.failed, poolSize: pool.length, interactions: profile.interactions,
+    waveError, waveSources: await waveSources(),
   };
 }
 

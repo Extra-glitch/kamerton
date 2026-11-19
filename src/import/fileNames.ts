@@ -37,3 +37,17 @@ const AUDIO_EXT = /\.(mp3|m4a|aac|flac|ogg|oga|opus|wav|wma|alac|aiff?|mka)$/i;
 
 /** Подходит ли присланный файл: по типу или по расширению (Telegram иногда пишет application/octet-stream). */
 export const isAudioFile = (mime: string | null | undefined, name: string) => /^audio\//i.test(mime ?? '') || AUDIO_EXT.test(name);
+
+/**
+ * Служебное имя файла, в котором нет названия песни. Telegram при «Поделиться» отдаёт файл из своего
+ * кэша с именем «<номер сервера>_<номер документа>.mp3» (например, 2_5341234123412341234.mp3);
+ * так же выглядят имена, которые придумывают системные загрузчики.
+ */
+export function isOpaqueName(name: string): boolean {
+  const base = name.replace(/\.[a-z0-9]{2,5}$/i, '').trim();
+  return !base
+    || /^-?\d+_-?\d{6,}$/.test(base)
+    || /^(audio|file|document|track|music|sound|voice|ptt)[\s_-]*[\d_\-\s:.]*$/i.test(base)
+    || /^[0-9a-f]{16,}$/i.test(base)
+    || /^\d+$/.test(base);
+}

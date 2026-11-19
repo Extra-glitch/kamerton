@@ -28,6 +28,8 @@ export interface SourceCapabilities {
   metadata: { isrc: boolean; explicit: boolean; genres: boolean; audioFeatures: boolean; license: boolean };
   mlAllowed: boolean;
   attributionRequired: boolean;
+  /** Сохранять на телефон можно не все песни источника, а только разрешённые (решается для каждой песни). */
+  offlineScope?: 'all' | 'some';
 }
 
 /** Честное состояние подключения. */

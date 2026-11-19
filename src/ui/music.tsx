@@ -302,6 +302,7 @@ export function TrackSheet() {
               <SheetAction icon="plus" label="Новый плейлист" onPress={async () => { const id = await repo.createPlaylist({ name: t.title }); await repo.addTrackToPlaylist(id, t.id); bumpData(); close(); toast('Плейлист создан'); }} />
               {lists.map((p) => <SheetAction key={p.id} icon="queue" label={p.name} onPress={async () => { await repo.addTrackToPlaylist(p.id, t.id); bumpData(); close(); toast(`Добавлено в «${p.name}»`); }} />)}
             </> : <>
+              <LicenseInfo s={src} />
               <VersionBlock t={t} onPick={async (s) => { await repo.setPreferredSource(t.id, s.id); if (usePlayer.getState().current?.id === t.id) await player.switchSource(s.id); bumpData(); player.invalidate(t.id); close(); toast(`Источник: ${sourceName(s.source)}`); }} />
               {playable ? <SheetAction icon="play" label="Слушать" onPress={() => go(() => void playTracks([t]))} /> : null}
               {playable ? <SheetAction icon="next" label="Играть следующим" onPress={() => go(() => void player.playNext(t.id))} /> : null}
@@ -321,6 +322,8 @@ export function TrackSheet() {
               </View> : null}
               <SheetAction icon={t.liked ? 'heartOn' : 'heart'} tone={t.liked ? 'accent' : undefined} label={t.liked ? 'Убрать из любимого' : 'В любимое'} onPress={() => void react('like', 'Добавлено в любимое')} />
               <SheetAction icon="plus" label="Добавить в плейлист" onPress={async () => { setLists((await repo.listPlaylists()).filter((p) => !p.smartRule)); setMode('playlist'); }} />
+              {t.sources.some((x) => x.source === 'local') ? <SheetAction icon="cover" label={t.sources.some((x) => x.extra?.needsInfo) ? 'Указать, что это за песня' : 'Изменить название и обложку'}
+                sub={t.sources.some((x) => x.extra?.needsInfo) ? 'Файл пришёл без названия' : undefined} onPress={() => go(() => router.push({ pathname: '/identify/[id]', params: { id: t.id } }))} /> : null}
               <SheetAction icon="similar" label="Похожие композиции" onPress={() => go(() => router.push({ pathname: '/similar/[id]', params: { id: t.id } }))} />
               {playable ? <SheetAction icon="radio" label="Создать радио по этой песне" onPress={() => go(() => void player.playList([{ trackId: t.id }], 0, `radio:${t.id}`))} /> : null}
               <SheetAction icon="user" label="Перейти к исполнителю" onPress={() => go(() => router.push({ pathname: '/artist/[name]', params: { name: t.artist, ...(src?.source === 'deezer' && src.artistId ? { deezer: src.artistId } : {}) } }))} />
@@ -340,6 +343,24 @@ export function TrackSheet() {
           </ScrollView>
         </Glass>
       </View>
+    </View>
+  );
+}
+
+/** Автор, лицензия, площадка и страница оригинала — для источников со свободными лицензиями. */
+export function LicenseInfo({ s }: { s: SourceTrack | null | undefined }) {
+  if (!s || (!s.licenseUrl && s.source !== 'openverse' && s.source !== 'jamendo')) return null;
+  const x = (s.extra ?? {}) as Record<string, string | undefined>;
+  const platform = x.providerName ?? sourceName(s.source);
+  const license = x.licenseLabel ?? s.attribution?.split(',').find((p) => /CC|достояние|Sampling/i.test(p))?.trim();
+  const link = (label: string, url?: string) => (url ? <T v="small" c="accent" accessibilityRole="link" onPress={() => void Linking.openURL(url)}>{label}</T> : <T v="small" c="muted">{label}</T>);
+  return (
+    <View testID="license-info" style={{ marginBottom: 10, gap: 2 }}>
+      {link(`Автор: ${s.artist}`, x.creatorUrl)}
+      {license ? link(`Лицензия: ${license}`, s.licenseUrl) : null}
+      {link(`Страница оригинала на ${platform}`, s.externalUrl)}
+      {s.source === 'openverse' ? <T v="small" c="faint">Найдено через Openverse. Openverse не проверяет лицензии: перед повторным использованием сверьте их на странице оригинала.</T> : null}
+      {s.source === 'jamendo' || x.provider === 'jamendo' ? <T v="small" c="faint">Песни Jamendo играют только онлайн: условия Jamendo не разрешают приложениям хранить их на телефоне.</T> : null}
     </View>
   );
 }
