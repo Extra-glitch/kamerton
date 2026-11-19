@@ -54,6 +54,7 @@ export default function EmbedScreen() {
             : <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><T c="muted">Плеер остановлен, пока приложение было свёрнуто</T></View>}
       </Glass>
       {failed ? <Notice tone="danger" text="Плеер не загрузился. Проверьте интернет и VPN." /> : null}
+      {embed.provider === 'soundcloud' ? <Notice text="Если плеер предлагает «Play on SoundCloud», нажмите «Listen in browser»: запись заиграет прямо здесь." /> : null}
       <Notice title="В России нужен VPN" text={`${sourceName(src.source)} заблокирован. Если плеер остаётся пустым или бесконечно загружается, включите свой VPN и нажмите «Обновить». Скачать запись отсюда нельзя: это запрещают правила сервиса.`} />
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
         <Btn label="Обновить" kind="line" onPress={() => { setFailed(false); setAttempt((n) => n + 1); }} style={{ flex: 1 }} />

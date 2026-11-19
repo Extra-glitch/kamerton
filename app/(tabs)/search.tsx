@@ -91,7 +91,7 @@ export default function Search() {
             <Glass style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
               <Cover uri={top.imageUrl} title={top.name} size={72} radius={36} />
               <View style={{ flex: 1 }}>
-                <T v="h2" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{top.name}</T>
+                <T v="h2" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{top.name}</T>
                 <T v="small" c="muted">Исполнитель{top.followers && top.source === 'deezer' ? `, ${top.followers.toLocaleString('ru-RU')} слушателей в Deezer` : ''}</T>
               </View>
               <Icon name="forward" size={22} color={c.accent} />
