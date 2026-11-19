@@ -40,12 +40,12 @@ function RunCard({ r }: { r: ProviderRun }) {
 const ORDER: IntegrationKind[] = ['user-import', 'own-server', 'authorized-download', 'authorized-stream', 'official-api', 'external-player', 'catalog', 'official-sdk', 'external-app'];
 type Can = ReturnType<typeof abilities>;
 /** Подписи возможностей. «Целиком» у YouTube — только в видимом плеере, «офлайн» у части источников — не для всех песен. */
-function abilityBadges(can: Can): { key: string; label: string; ok: boolean }[] {
+function abilityBadges(can: Can): { key: string; label: string; ok: boolean; part?: boolean }[] {
   return [
     { key: 'search', label: `${can.search ? '✓' : '✕'} поиск`, ok: can.search },
     { key: 'full', label: can.full === 'visible' ? '✓ целиком в видимом плеере' : `${can.full ? '✓' : '✕'} целиком`, ok: !!can.full },
     { key: 'background', label: `${can.background ? '✓' : '✕'} в фоне`, ok: can.background },
-    { key: 'offline', label: can.offline === 'some' ? '◐ офлайн, где разрешено' : `${can.offline ? '✓' : '✕'} офлайн`, ok: !!can.offline },
+    { key: 'offline', label: can.offline === 'some' ? 'офлайн только у части песен' : `${can.offline ? '✓' : '✕'} офлайн`, ok: can.offline === 'all', part: can.offline === 'some' },
   ];
 }
 
@@ -62,7 +62,7 @@ function SourceRow({ id, name, detail, ready, can, on, onToggle }: { id: string;
       {!on || detail ? <T v="small" c="muted" numberOfLines={2}>{on ? detail : 'Выключен: не ищет и не играет'}</T> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
         {on ? <Badge label={ready ? 'подключён' : 'нужна настройка'} tone={ready ? 'ok' : 'faint'} /> : null}
-        {abilityBadges(can).map((b) => <Badge key={b.key} label={b.label} tone={b.ok ? 'ok' : 'faint'} />)}
+        {abilityBadges(can).map((b) => <Badge key={b.key} label={b.label} tone={b.ok ? 'ok' : b.part ? 'muted' : 'faint'} />)}
       </View>
     </View>
   );
