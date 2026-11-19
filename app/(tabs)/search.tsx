@@ -15,12 +15,14 @@ import { Ambient } from '@/ui/ambient';
 import { Glass } from '@/ui/glass';
 import { Btn, Chip, Cover, Empty, Field, Loading, Notice, Press, Section, Shelf, s as ks, T } from '@/ui/kit';
 import { TrackList, TrackRow } from '@/ui/music';
-import { BOTTOM_PAD, SPACE } from '@/ui/theme';
+import { Icon } from '@/ui/icons';
+import { BOTTOM_PAD, SPACE, useColors } from '@/ui/theme';
 
 type Version = 'all' | 'original' | 'clean';
 const PAGE = 25;
 
 export default function Search() {
+  const c = useColors();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
@@ -85,14 +87,14 @@ export default function Search() {
         {!link && r.data ? <View testID="search-results">
           {r.data.errors.length ? <Notice tone="warn" text={`Не ответили: ${r.data.errors.map((e) => `${e.source} (${e.message})`).join('; ')}`} /> : null}
 
-          {top ? <Press testID="top-artist" accessibilityRole="link" onPress={() => openArtist(top.name, top.source, top.id)} style={{ marginTop: 6 }}>
+          {top ? <Press testID="top-artist" accessibilityRole="link" accessibilityLabel={`Открыть исполнителя: ${top.name}`} onPress={() => openArtist(top.name, top.source, top.id)} style={{ marginTop: 6 }}>
             <Glass style={{ padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
               <Cover uri={top.imageUrl} title={top.name} size={72} radius={36} />
               <View style={{ flex: 1 }}>
-                <T v="h2" numberOfLines={1}>{top.name}</T>
-                <T v="small" c="muted">Исполнитель{top.followers ? `, ${top.followers.toLocaleString('ru-RU')} слушателей в Deezer` : ''}</T>
+                <T v="h2" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{top.name}</T>
+                <T v="small" c="muted">Исполнитель{top.followers && top.source === 'deezer' ? `, ${top.followers.toLocaleString('ru-RU')} слушателей в Deezer` : ''}</T>
               </View>
-              <T v="strong" c="accent">Открыть</T>
+              <Icon name="forward" size={22} color={c.accent} />
             </Glass>
           </Press> : null}
 

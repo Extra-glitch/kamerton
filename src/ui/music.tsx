@@ -172,6 +172,7 @@ const HIDE_MINI = ['/player', '/queue', '/lyrics', '/onboarding', '/embed'];
 
 function MiniPlayer() {
   const c = useColors();
+  const motion = useMotion();
   const cur = usePlayer((p) => p.current);
   const src = usePlayer((p) => p.source);
   const playing = usePlayer((p) => p.playing);
@@ -181,7 +182,7 @@ function MiniPlayer() {
   if (!cur) return null;
   const preview = src ? playMode(src) === 'preview' : false;
   return (
-    <Animated.View entering={FadeInDown.duration(260)} exiting={FadeOutDown.duration(200)}>
+    <Animated.View entering={motion ? FadeInDown.duration(260) : undefined} exiting={motion ? FadeOutDown.duration(200) : undefined}>
       <Pressable testID="mini-player" accessibilityRole="button" accessibilityLabel={`Открыть плеер: ${cur.title}`} onPress={() => router.push('/player')}
         onTouchStart={(e) => { start.current = e.nativeEvent.pageX; }}
         onTouchEnd={(e) => { const d = start.current === null ? 0 : e.nativeEvent.pageX - start.current; start.current = null; if (d < -70) void player.next(); else if (d > 70) void player.previous(); }}
@@ -261,6 +262,7 @@ const go = (fn: () => void) => { closeSheet(); setTimeout(fn, 30); };
 
 export function TrackSheet() {
   const c = useColors();
+  const motion = useMotion();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const t = useUi((u) => u.sheetTrack);
@@ -287,10 +289,10 @@ export function TrackSheet() {
   const offlineSrc = t.sources.find((s) => s.canOffline && !s.localPath && adapter(s.source)?.capabilities.canOffline);
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
+      <Animated.View entering={motion ? FadeIn.duration(180) : undefined} exiting={motion ? FadeOut.duration(160) : undefined} style={[StyleSheet.absoluteFill, { backgroundColor: c.scrim }]}>
         <Pressable accessibilityLabel="Закрыть меню" style={{ flex: 1 }} onPress={close} />
       </Animated.View>
-      <Animated.View entering={SlideInDown.springify().damping(20).stiffness(170)} exiting={SlideOutDown.duration(200)} style={{ position: 'absolute', left: 8, right: 8, bottom: insets.bottom + 8, maxHeight: height * 0.84 }}>
+      <Animated.View entering={motion ? SlideInDown.springify().damping(20).stiffness(170) : undefined} exiting={motion ? SlideOutDown.duration(200) : undefined} style={{ position: 'absolute', left: 8, right: 8, bottom: insets.bottom + 8, maxHeight: height * 0.84 }}>
         <Glass floating radius={28} intensity={70}>
           <View style={{ alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: c.line, marginTop: 8 }} />
           <ScrollView contentContainerStyle={{ padding: 18, paddingTop: 12 }}>
@@ -385,11 +387,12 @@ export function OfflineBanner() {
 
 export function Toast() {
   const c = useColors();
+  const motion = useMotion();
   const insets = useSafeAreaInsets();
   const text = useUi((u) => u.toast);
   if (!text) return null;
   return (
-    <Animated.View key={text} entering={FadeInDown.duration(220)} exiting={FadeOut.duration(200)} pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 8, left: 14, right: 14 }}>
+    <Animated.View key={text} entering={motion ? FadeInDown.duration(220) : undefined} exiting={motion ? FadeOut.duration(200) : undefined} pointerEvents="none" accessibilityLiveRegion="polite" style={{ position: 'absolute', top: insets.top + 8, left: 14, right: 14 }}>
       <Glass floating solid radius={RADIUS.card} intensity={60} style={{ paddingVertical: 12, paddingHorizontal: 16 }}><Text style={[TYPE.strong, { color: c.text }]}>{text}</Text></Glass>
     </Animated.View>
   );

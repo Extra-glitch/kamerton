@@ -16,6 +16,11 @@ export function useMotion(): boolean {
   return allowed && !reduce;
 }
 
+/** Анимация появления, только если движение разрешено. С отключёнными системными анимациями Reanimated может оставить вид невидимым. */
+export function useEntering<T>(anim: T): T | undefined {
+  return useMotion() ? anim : undefined;
+}
+
 const SPOTS = [
   { x: -0.38, y: -0.3, dx: 0.06, dy: 0.04 },
   { x: 0.42, y: 0.12, dx: -0.05, dy: 0.06 },
@@ -24,6 +29,7 @@ const SPOTS = [
 
 function Blob({ color, i, size, t, w, h, strength }: { color: string; i: number; size: number; t: SharedValue<number>; w: number; h: number; strength: number }) {
   const id = useId().replace(/:/g, '');
+  const motion = useMotion();
   const p = SPOTS[i];
   const style = useAnimatedStyle(() => ({
     transform: [
@@ -33,7 +39,7 @@ function Blob({ color, i, size, t, w, h, strength }: { color: string; i: number;
     ],
   }));
   return (
-    <Animated.View entering={FadeIn.duration(900)} exiting={FadeOut.duration(900)} style={[{ position: 'absolute', width: size, height: size, left: w / 2 + p.x * w - size / 2, top: h / 2 + p.y * h - size / 2 }, style]}>
+    <Animated.View entering={motion ? FadeIn.duration(900) : undefined} exiting={motion ? FadeOut.duration(900) : undefined} style={[{ position: 'absolute', width: size, height: size, left: w / 2 + p.x * w - size / 2, top: h / 2 + p.y * h - size / 2 }, style]}>
       <Svg width={size} height={size}>
         <Defs>
           <RadialGradient id={`a${id}`} cx="50%" cy="50%" r="50%">

@@ -116,6 +116,18 @@ def scroll_to(label, attempts=6):
     return None
 
 
+def scroll_to_part(label, attempts=4):
+    """Как scroll_to, но ищет часть подписи."""
+    w, h = size()
+    for _ in range(attempts):
+        n = find(screen(), label, exact=False)
+        if n:
+            return n
+        shell(f"input swipe {w // 2} {int(h * .7)} {w // 2} {int(h * .35)} 350")
+        time.sleep(.8)
+    return None
+
+
 def side_scroll_to(label, anchor, attempts=6):
     """Прокручивает горизонтальный ряд, высота которого определяется один раз."""
     w, _ = size()
@@ -315,13 +327,9 @@ def catalog_checks():
     record("Каталог находит российских исполнителей", artist, "", required=False)
     if not artist:
         soft_diagnostics()
-    row = wait(", фрагмент", 10, exact=False)
-    if row:
-        tap(row)
-        ok, st = wait_session(is_playing, 30)
-        record("Фрагмент из каталога играет", ok, json.dumps(st, ensure_ascii=False), required=False)
-        shell("input keyevent KEYCODE_MEDIA_PAUSE")
-    opened = find(screen(), "Открыть")
+    shell("input keyevent 66")  # кнопка «Найти» на клавиатуре прячет её, иначе строки под ней
+    time.sleep(1)
+    opened = find(screen(), "Открыть исполнителя", exact=False)
     if opened:
         tap(opened)
         page = wait("Популярное", 30)
@@ -329,14 +337,26 @@ def catalog_checks():
         screenshot("08-artist")
         record("Страница исполнителя из каталога", page, required=False)
         shell("input keyevent KEYCODE_BACK")
-        time.sleep(1)
+        time.sleep(1.5)
+    row = scroll_to_part(", фрагмент")
+    if row:
+        tap(row)
+        ok, st = wait_session(is_playing, 30)
+        record("Фрагмент из каталога играет", ok, json.dumps(st, ensure_ascii=False), required=False)
+        shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    else:
+        record("Фрагмент из каталога играет", False, "строка с фрагментом не найдена", required=False)
+    w, h = size()
+    for _ in range(3):  # обратно к полю поиска
+        shell(f"input swipe {w // 2} {int(h * .3)} {w // 2} {int(h * .8)} 300")
+        time.sleep(.6)
     if type_into("Morgenshtern", "https://soundcloud.com/forss/flickermood") or type_into("Песня, исполнитель или ссылка", "https://soundcloud.com/forss/flickermood"):
         row = wait(", SoundCloud", 40, exact=False)  # подпись строки трека: «Название, Автор, SoundCloud»
         record("SoundCloud по ссылке распознаётся", row, required=False)
         if row:
             tap(row)
             embed = wait("В России нужен VPN", 20, exact=False)
-            time.sleep(6)
+            time.sleep(15)
             screenshot("09-embed")
             record("Открывается встроенный плеер SoundCloud", embed, required=False)
             if not embed:

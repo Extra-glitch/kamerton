@@ -3,7 +3,7 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 export type IconName =
   | 'play' | 'pause' | 'next' | 'prev' | 'shuffle' | 'repeat' | 'repeatOne' | 'heart' | 'heartOn' | 'plus' | 'queue' | 'more' | 'back' | 'down' | 'close'
   | 'lyrics' | 'video' | 'similar' | 'check' | 'up' | 'search' | 'radio' | 'timer' | 'share' | 'trash' | 'link' | 'thumbDown' | 'cover' | 'fork' | 'volume'
-  | 'wave' | 'library' | 'user' | 'sparkle' | 'download' | 'note';
+  | 'wave' | 'library' | 'user' | 'sparkle' | 'download' | 'note' | 'forward';
 
 /** Собственный набор значков: единая толщина линии и скруглённые окончания. */
 export function Icon({ name, size = 24, color }: { name: IconName; size?: number; color: string }) {
@@ -24,6 +24,7 @@ export function Icon({ name, size = 24, color }: { name: IconName; size?: number
     case 'queue': body = <><Path {...s} d="M4 6.500h16M4 12h10M4 17.500h7" /><Path {...f} d="M16 13.500v7l5.500-3.500z" /></>; break;
     case 'more': body = <><Circle {...f} cx="5.500" cy="12" r="1.700" /><Circle {...f} cx="12" cy="12" r="1.700" /><Circle {...f} cx="18.500" cy="12" r="1.700" /></>; break;
     case 'back': body = <Path {...s} d="M14.500 5.500 8 12l6.500 6.500" />; break;
+    case 'forward': body = <Path {...s} d="M9.500 5.500 16 12l-6.500 6.500" />; break;
     case 'down': body = <Path {...s} d="M5.500 9 12 15.500 18.500 9" />; break;
     case 'up': body = <Path {...s} d="M5.500 15 12 8.500 18.500 15" />; break;
     case 'close': body = <Path {...s} d="M6 6l12 12M18 6 6 18" />; break;

@@ -67,7 +67,9 @@ export async function federatedSearch(q: string, opts: { sources?: string[]; lim
       if (!catalog && similarity(q, ar.name) < RELEVANT) continue;
       const k = normalizeText(primaryArtist(ar.name));
       const e = artistMap.get(k);
-      if (e) { e.sources.push(ar.source); if (!e.imageUrl && ar.imageUrl) e.imageUrl = ar.imageUrl; }
+      // Карточка каталога точнее: у неё фото, число слушателей и страница с популярным.
+      if (e && catalog && !CATALOG_SOURCES.has(e.source)) artistMap.set(k, { ...ar, imageUrl: ar.imageUrl ?? e.imageUrl, sources: [ar.source, ...e.sources] });
+      else if (e) { if (!e.sources.includes(ar.source)) e.sources.push(ar.source); if (!e.imageUrl && ar.imageUrl) e.imageUrl = ar.imageUrl; }
       else artistMap.set(k, { ...ar, sources: [ar.source] });
     }
   }

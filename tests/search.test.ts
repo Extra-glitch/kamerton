@@ -23,10 +23,13 @@ describe('поиск по каталогу и свободным источни�
       [/api\.deezer\.com\/search\/album/, { data: [] }],
       [/api\.deezer\.com\/search/, { data: [dz(1, 'Cadillac', 'MORGENSHTERN'), dz(2, 'Aristocrat', 'MORGENSHTERN')] }],
       [/tracks\/search/, { data: [au('a1', 'Morning Shine', 'Free Sounds'), au('a2', 'Morgenshtern Tribute', 'Fan Band')] }],
-      [/users\/search|playlists\/search/, { data: [] }],
+      [/users\/search/, { data: [{ id: 'fake', name: 'Morgenshtern', follower_count: 24 }] }],
+      [/playlists\/search/, { data: [] }],
     ]);
     const r = await federatedSearch('morgenshtern', { sources: ['deezer', 'audius'] });
-    expect(r.topArtist?.name).toBe('MORGENSHTERN');
+    // Однофамилец со свободной площадки не подменяет карточку каталога.
+    expect(r.topArtist).toMatchObject({ name: 'MORGENSHTERN', source: 'deezer', id: '77', imageUrl: 'p.jpg' });
+    expect(r.topArtist?.sources.sort()).toEqual(['audius', 'deezer']);
     expect(r.tracks.map((t) => t.title)).toEqual(expect.arrayContaining(['Cadillac', 'Aristocrat', 'Morgenshtern Tribute']));
     expect(r.tracks.map((t) => t.title)).not.toContain('Morning Shine');
     expect(r.loose.map((t) => t.title)).toEqual(['Morning Shine']);
