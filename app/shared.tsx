@@ -28,7 +28,7 @@ export default function SharedLikes() {
     const card = buildTasteCard(s.profileName || 'Друг', await repo.getViews(await repo.likedTrackIds()), profile);
     const text = JSON.stringify(card);
     if (Platform.OS === 'web') await Share.share({ message: text });
-    else await Sharing.shareAsync(writeExportFile('taste-card.json', text), { dialogTitle: 'Карточка вкуса' });
+    else await Sharing.shareAsync(await writeExportFile('taste-card.json', text), { dialogTitle: 'Карточка вкуса' });
   };
   const add = async (text: string) => {
     try { setError(null); const card = parseTasteCard(text); const id = await repo.saveFriend(card.name, card); setPaste(''); bumpData(); setOpen(id); toast(`Добавлено: ${card.name}`); }

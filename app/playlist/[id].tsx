@@ -40,7 +40,7 @@ export default function PlaylistScreen() {
   const doExport = async (fmt: ExportFormat) => {
     const f = await playlistExportText(id, fmt);
     if (Platform.OS === 'web') { void Share.share({ message: f.text }); return; }
-    await Sharing.shareAsync(writeExportFile(f.name, f.text), { dialogTitle: p.name });
+    await Sharing.shareAsync(await writeExportFile(f.name, f.text), { dialogTitle: p.name });
   };
   return (
     <Screen right={<IconBtn name="more" label="Изменить плейлист" active={edit} onPress={() => { setEdit(!edit); setName(p.name); }} />}>

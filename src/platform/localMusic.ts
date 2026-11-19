@@ -27,12 +27,12 @@ async function tagsOf(uri: string): Promise<AudioTags | null> {
   }
 }
 
-function saveCover(id: string, pic: NonNullable<AudioTags['picture']>): string | undefined {
+async function saveCover(id: string, pic: NonNullable<AudioTags['picture']>): Promise<string | undefined> {
   try {
     const dir = new Directory(Paths.document, 'covers');
     if (!dir.exists) dir.create({ intermediates: true });
     const file = new File(dir, `${id}.${pic.mime.includes('png') ? 'png' : 'jpg'}`);
-    if (!file.exists) { file.create(); file.write(pic.data); }
+    if (!file.exists) { file.create(); await file.write(pic.data); }
     return file.uri;
   } catch { return undefined; }
 }
@@ -40,14 +40,13 @@ function saveCover(id: string, pic: NonNullable<AudioTags['picture']>): string |
 export function trackFromFile(name: string, uri: string, durationSec: number | undefined, tags: AudioTags | null, origin?: { from: string; at: number }): RemoteTrack {
   const fromName = parseFileName(name);
   const id = md5(uri);
-  const cover = tags?.picture ? saveCover(id, tags.picture) : undefined;
   // Теги важнее имени файла, но в них тоже бывают имена ботов и адреса сайтов.
   const title = cleanImportedName(tags?.title) || fromName.title;
   const artist = cleanImportedName(tags?.artist) || fromName.artist || 'Неизвестный исполнитель';
   return {
     source: 'local', sourceTrackId: id, title, artist,
     album: tags?.album || undefined, trackNumber: tags?.trackNumber, durationSec: tags?.durationSec ?? durationSec, isrc: tags?.isrc || undefined, mbid: tags?.mbid || undefined,
-    explicit: tags?.explicit ?? 'unknown', tags: tags?.genre ?? [], bpm: tags?.bpm, year: tags?.year, coverUrl: cover, availability: 'full', quality: tags?.quality, canOffline: true,
+    explicit: tags?.explicit ?? 'unknown', tags: tags?.genre ?? [], bpm: tags?.bpm, year: tags?.year, availability: 'full', quality: tags?.quality, canOffline: true,
     extra: { uri, fileName: name, lyrics: tags?.lyrics, importedFrom: origin?.from, importedAt: origin?.at },
   };
 }
@@ -55,6 +54,7 @@ export function trackFromFile(name: string, uri: string, durationSec: number | u
 async function addFile(name: string, uri: string, duration?: number, origin?: { from: string; at: number }, cover?: (t: RemoteTrack) => Promise<string | undefined>) {
   const tags = await tagsOf(uri);
   const t = trackFromFile(name, uri, duration, tags, origin);
+  if (tags?.picture) t.coverUrl = await saveCover(t.sourceTrackId, tags.picture);
   if (!t.coverUrl && cover) t.coverUrl = await cover(t).catch(() => undefined);
   const trackId = await upsertRemote(t, { library: true, pool: true, localPath: uri });
   if (tags?.lyrics) {
@@ -103,7 +103,7 @@ export async function importAudioFiles(files: IncomingFile[], from: string, cove
       let target = new File(dir, safe);
       const src = new File(f.uri);
       if (target.exists && target.size !== src.size) target = new File(dir, `${at}-${safe}`);
-      if (!target.exists) src.copy(target);
+      if (!target.exists) await src.copy(target); // копирование асинхронное: теги читаем только после него
       out.trackIds.push(await addFile(f.name, target.uri, undefined, { from, at }, cover));
     } catch (e) {
       console.warn('Файл не добавлен:', f.name, (e as Error).message);
@@ -141,7 +141,7 @@ export async function pickAudioFiles(): Promise<number> {
   if (!dir.exists) dir.create({ intermediates: true });
   for (const a of res.assets) {
     const target = new File(dir, a.name);
-    if (!target.exists) new File(a.uri).copy(target);
+    if (!target.exists) await new File(a.uri).copy(target);
     await addFile(a.name, target.uri, undefined, { from: 'выбор файла', at: Date.now() });
   }
   return res.assets.length;
@@ -175,7 +175,7 @@ export async function pickImage(): Promise<string | null> {
   const dir = new Directory(Paths.document, 'covers');
   if (!dir.exists) dir.create({ intermediates: true });
   const target = new File(dir, `pl-${Date.now()}-${a.name}`);
-  new File(a.uri).copy(target);
+  await new File(a.uri).copy(target);
   return target.uri;
 }
 
@@ -191,10 +191,10 @@ export async function downloadToApp(url: string, name: string): Promise<{ uri: s
 
 export function deleteFile(uri: string) { try { const f = new File(uri); if (f.exists) f.delete(); } catch { /* файла уже нет */ } }
 
-export function writeExportFile(name: string, text: string): string {
+export async function writeExportFile(name: string, text: string): Promise<string> {
   const f = new File(Paths.cache, name);
   if (f.exists) f.delete();
   f.create();
-  f.write(text);
+  await f.write(text);
   return f.uri;
 }

@@ -24,6 +24,8 @@ describe('имена файлов из Telegram и с сайтов', () => {
     expect(parseFileName('03. DEAD BLONDE – Мальчик на девятке.m4a')).toEqual({ artist: 'DEAD BLONDE', title: 'Мальчик на девятке' });
     expect(parseFileName('Lida_-_Lyubov.mp3')).toEqual({ artist: 'Lida', title: 'Lyubov' });
     expect(parseFileName('track.mp3')).toEqual({ title: 'track' });
+    expect(parseFileName('kamerton-2.mp3')).toEqual({ title: 'kamerton-2' });
+    expect(parseFileName('Miyagi-Captain.mp3')).toEqual({ artist: 'Miyagi', title: 'Captain' });
   });
   it('понимает, что файл — музыка, даже если Telegram не указал тип', () => {
     expect(isAudioFile('audio/mpeg', 'x')).toBe(true);

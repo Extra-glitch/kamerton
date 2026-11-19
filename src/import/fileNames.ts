@@ -25,7 +25,11 @@ export function cleanImportedName(raw: string | undefined | null): string {
 /** «01. Исполнитель - Название» из имени файла. */
 export function parseFileName(name: string): { artist?: string; title: string } {
   const base = cleanImportedName(name).replace(/^\d{1,3}[\s.)_-]+(?=\D)/, '');
-  const m = base.match(/^(.+?)\s+[-–—]\s+(.+)$/) ?? base.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+  // «Исполнитель - Название»; без пробелов («Artist-Title») — только если с обеих сторон есть буквы, чтобы «track-02» не разрезать.
+  const spaced = base.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  const tight = base.match(/^(.+?)[-–—](.+)$/);
+  const hasLetters = (x: string) => /\p{L}{2}/u.test(x);
+  const m = spaced ?? (tight && hasLetters(tight[1]) && hasLetters(tight[2]) ? tight : null);
   return m ? { artist: m[1].trim(), title: m[2].trim() } : { title: base || name };
 }
 

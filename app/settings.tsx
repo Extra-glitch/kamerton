@@ -19,7 +19,7 @@ export default function Settings() {
   const exportData = async () => {
     const text = JSON.stringify(await repo.exportUserData(), null, 2);
     if (Platform.OS === 'web') await Share.share({ message: text });
-    else await Sharing.shareAsync(writeExportFile('kamerton-data.json', text));
+    else await Sharing.shareAsync(await writeExportFile('kamerton-data.json', text));
   };
   return (
     <Screen title="Настройки">

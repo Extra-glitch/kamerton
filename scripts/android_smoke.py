@@ -389,10 +389,14 @@ def catalog_checks():
         diag = scroll_to("Диагностика источников")
         if diag:
             tap(diag)
-            ok = wait("Подключение", 20)
+            ok = wait("Источники", 20)
             time.sleep(1)
             screenshot("10-diagnostics")
             record("Открывается диагностика источников", ok, required=False)
+            row = scroll_to_part("Openverse")
+            time.sleep(1)
+            screenshot("10b-diagnostics-open")
+            record("В диагностике есть Openverse с выключателем", row, required=False)
 
 
 def print_images():
