@@ -1,7 +1,10 @@
 import type { RemoteTrack } from '@/core/types';
 import { archive } from './archive';
 import { audius } from './audius';
-import { apple, bandcamp, deezer, soundcloud, tidal, vk, yandex, youtubeMusic } from './external';
+import { deezer } from './deezer';
+import { apple, bandcamp, tidal, vk, yandex, youtubeMusic, zvuk } from './external';
+import { itunes } from './itunes';
+import { soundcloud } from './soundcloud';
 import { jamendo } from './jamendo';
 import { local } from './local';
 import { radio } from './radio';
@@ -13,7 +16,7 @@ import { youtube } from './youtube';
 /** Чтобы подключить новый источник, достаточно добавить его адаптер в этот список. */
 export const ADAPTERS: MusicSourceAdapter[] = [
   local, subsonic, audius, jamendo, archive, radio,
-  spotify, youtube, soundcloud, apple, tidal, yandex, vk, deezer, bandcamp, youtubeMusic,
+  deezer, itunes, yandex, vk, zvuk, youtube, soundcloud, spotify, apple, tidal, bandcamp, youtubeMusic,
 ];
 
 const byId = new Map(ADAPTERS.map((a) => [a.id, a]));
@@ -45,6 +48,22 @@ export async function readySources(ctx: SourceContext, test: (a: MusicSourceAdap
   const list = ADAPTERS.filter(test);
   const states = await Promise.all(list.map((a) => a.status(ctx).catch(() => ({ state: 'needs_setup' }) as SourceStatus)));
   return list.filter((_, i) => states[i].state === 'ready');
+}
+
+/** Каталоги для поиска песен, которых нет в свободных источниках. */
+export const CATALOG_SOURCES = new Set(['deezer', 'itunes']);
+/** Сервисы, где песню можно дослушать полностью по подписке. */
+export const LISTEN_ELSEWHERE = ['yandex', 'vk', 'zvuk'];
+
+/** Как трек можно включить в Камертоне. */
+export function playMode(t: Pick<RemoteTrack, 'source' | 'availability'>): 'player' | 'preview' | 'embed' | 'none' {
+  const a = byId.get(t.source);
+  if (!a) return 'none';
+  if (a.capabilities.playback === 'visible-embed' && t.availability === 'full') return 'embed';
+  if (!a.resolveStream) return 'none';
+  if (t.availability === 'full' && a.capabilities.playback === 'direct-stream') return 'player';
+  if (t.availability === 'preview') return 'preview';
+  return 'none';
 }
 
 export const isPlayableHere = (t: Pick<RemoteTrack, 'source' | 'availability'>) => DIRECT_SOURCES.has(t.source) && t.availability === 'full';

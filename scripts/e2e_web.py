@@ -30,6 +30,13 @@ ARCHIVE = {"metadata": {"identifier": "show1", "title": "Концерт в ДК,
            "files": [{"name": "t01.flac", "format": "Flac", "source": "original", "title": "Вступление", "track": "1", "length": "180"}, {"name": "t01.mp3", "format": "VBR MP3", "source": "derivative"}, {"name": "t02.flac", "format": "Flac", "source": "original", "title": "Снег над заводом", "track": "2", "length": "204"}, {"name": "t02.mp3", "format": "VBR MP3", "source": "derivative"}]}
 STATIONS = [{"stationuuid": f"s{i}", "name": n, "url_resolved": "https://stream.test/radio.wav", "favicon": "", "tags": "rock,indie", "country": "Россия", "codec": "MP3", "bitrate": 128, "lastcheckok": 1, "clickcount": 10 - i} for i, n in enumerate(["Радио Ноль", "Волна 101", "Ночной эфир"])]
 
+DZ_ARTIST = {"id": 77, "name": "MORGENSHTERN", "picture_big": "https://cdn.test/artist77.png", "picture_medium": "https://cdn.test/artist77.png", "nb_fan": 912000}
+def dz(i, title, explicit=1):
+    return {"id": 9000 + i, "readable": True, "title": title, "link": f"https://www.deezer.com/track/{9000 + i}", "duration": 168 if title == "Cadillac" else 150 + i * 9, "rank": 900000 - i, "explicit_lyrics": explicit == 1,
+            "explicit_content_lyrics": explicit, "preview": f"https://preview.test/dz{i}.wav", "artist": {"id": 77, "name": "MORGENSHTERN"}, "album": {"id": 500 + i % 2, "title": ["LAST ONE", "MILLION DOLLAR: HAPPINESS"][i % 2], "cover_big": f"https://cdn.test/dz{i % 3}.png"}}
+DZ_TRACKS = [dz(i, t, e) for i, (t, e) in enumerate([("Cadillac", 1), ("Aristocrat", 1), ("Ice", 3), ("El Problema", 1), ("Show", 0)])]
+DZ_ALBUMS = [{"id": 500, "title": "LAST ONE", "release_date": "2021-12-31", "record_type": "album", "cover_big": "https://cdn.test/dz0.png", "artist": {"name": "MORGENSHTERN"}}, {"id": 501, "title": "MILLION DOLLAR: HAPPINESS", "release_date": "2020-07-17", "record_type": "album", "cover_big": "https://cdn.test/dz1.png", "artist": {"name": "MORGENSHTERN"}}]
+
 def wav():
     p = tempfile.mktemp(suffix=".wav")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=330:duration=20", "-ar", "8000", "-ac", "1", p], check=True)
@@ -62,7 +69,7 @@ def respond(route):
     url = route.request.url; u = urlparse(url); q = parse_qs(u.query); requests.append(url)
     cors = {"Access-Control-Allow-Origin": "*"}
     js = lambda o: route.fulfill(status=200, headers={**cors, "Content-Type": "application/json"}, body=json.dumps(o, ensure_ascii=False))
-    if "/stream" in u.path or u.netloc in ("stream.test",) or "/download/" in u.path: return route.fulfill(status=200, headers={**cors, "Content-Type": "audio/wav", "Accept-Ranges": "none"}, body=WAV)
+    if "/stream" in u.path or u.netloc in ("stream.test", "preview.test") or "/download/" in u.path: return route.fulfill(status=200, headers={**cors, "Content-Type": "audio/wav", "Accept-Ranges": "none"}, body=WAV)
     if u.netloc == "cdn.test": return route.fulfill(status=200, headers={**cors, "Content-Type": "image/png"}, body=cover(u.path))
     if "archive.org" in u.netloc:
         if "/services/img" in u.path: return route.fulfill(status=200, headers={**cors, "Content-Type": "image/png"}, body=cover("archive"))
@@ -77,6 +84,18 @@ def respond(route):
         if "/recording" in u.path and "Снег над заводом" in text: return js({"recordings": [{"id": "mb-1", "title": "Снег над заводом", "score": 100, "length": 157000, "isrcs": ["RUTEST000001"], "artist-credit": [{"name": "Тихая Вода"}], "tags": [{"name": "ambient", "count": 2}]}]})
         return js({"recordings": [], "artists": [], "release-groups": []})
     if "listenbrainz" in u.netloc: return js([])
+    if "api.deezer.com" in u.netloc:
+        s = q.get("q", [""])[0].lower()
+        hit = "morgen" in s or "морген" in s
+        if u.path == "/search/artist": return js({"data": [DZ_ARTIST] if hit else []})
+        if u.path == "/search/album": return js({"data": DZ_ALBUMS if hit else []})
+        if u.path == "/search": return js({"data": DZ_TRACKS if hit else []})
+        if u.path == "/artist/77": return js(DZ_ARTIST)
+        if u.path == "/artist/77/top": return js({"data": DZ_TRACKS})
+        if u.path == "/artist/77/albums": return js({"data": DZ_ALBUMS})
+        if u.path.startswith("/album/"): return js({"id": 500, "title": "LAST ONE", "cover_big": "https://cdn.test/dz0.png", "release_date": "2021-12-31", "tracks": {"data": DZ_TRACKS[:3]}})
+        return js({"data": []})
+    if "itunes.apple.com" in u.netloc: return js({"resultCount": 0, "results": []})
     if "api.audius.co" in u.netloc:
         s = q.get("query", [""])[0].lower()
         if "users/search" in u.path: return js({"data": [{"id": f"u{i}", "name": a[0]} for i, a in enumerate(ARTISTS) if s and s in a[0].lower()]})
@@ -129,10 +148,19 @@ def flow(page, shot, tid, errors, requests):
         tid("player-close").wait_for(); tid("player-close").click(); tid("tab-search").wait_for()
         title2 = tid("mini-player").inner_text(); assert title1 != title2, "следующий трек не включился"
 
-        tid("tab-search").click(); tid("search-input").fill("снег над"); page.get_by_text("Композиции").wait_for(timeout=8000); page.wait_for_timeout(600); shot("09-search")
+        tid("tab-search").click(); tid("search-input").fill("снег над"); page.get_by_text("Треки", exact=True).wait_for(timeout=8000); page.wait_for_timeout(600); shot("09-search")
         expect(page.get_by_text("Яндекс Музыка", exact=True).first).to_be_visible()
+        # Каталог: российский исполнитель находится, случайные треки свободных каталогов не лезут в выдачу.
+        tid("search-input").fill("morgenshtern"); tid("top-artist").wait_for(timeout=8000); page.get_by_text("Cadillac", exact=True).first.wait_for(); page.wait_for_timeout(700); shot("09b-search-catalog")
+        expect(page.get_by_text("фрагмент", exact=True).first).to_be_visible()
+        before = len([r for r in requests if "preview.test" in r])
+        page.get_by_text("Aristocrat", exact=True).first.click(); page.wait_for_timeout(1500)
+        assert len([r for r in requests if "preview.test" in r]) > before, "фрагмент не запрашивался"
+        tid("top-artist").click(); page.get_by_text("Популярное", exact=True).wait_for(timeout=8000); page.get_by_text("Альбомы и синглы").wait_for(); page.wait_for_timeout(800); shot("09c-artist")
+        page.go_back(); tid("search-input").wait_for()
         tid("tab-library").click(); tid("open-import").wait_for(); shot("10-library"); tid("open-import").click()
-        tid("import-text").fill("Тихая Вода - Снег над заводом\nСеверный Вокзал - Последняя электричка (Remix)\nНикто - Несуществующая песня"); tid("import-text-go").click()
+        tid("import-text").fill("Мне нравится\n3 трека\nСнег над заводом\nТихая Вода\n2:37\nПоследняя электричка (Remix)\nСеверный Вокзал\n3:10\nНесуществующая песня\nНикто\n4:00\nCadillac\nMORGENSHTERN, Элджей\n2:48"); tid("import-text-go").click()
+        tid("import-start").wait_for(); page.get_by_text("Найдено песен: 4").wait_for(); shot("10b-import-preview"); tid("import-start").click()
         tid("import-save").wait_for(timeout=30000); page.wait_for_timeout(300); shot("11-import-review"); tid("import-save").click()
         tid("playlist-play").wait_for(timeout=8000); expect(page.get_by_text("Несуществующая песня", exact=True).last).to_be_visible(); shot("12-playlist"); tid("playlist-play").click(); page.wait_for_timeout(600)
         page.goto("http://127.0.0.1:8765/portrait") if False else None

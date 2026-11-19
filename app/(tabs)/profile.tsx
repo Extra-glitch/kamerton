@@ -7,6 +7,7 @@ import { buildPortrait } from '@/reco/extras';
 import { loadReco } from '@/services/reco';
 import { useUi } from '@/state/app';
 import { Row, T } from '@/ui/kit';
+import { Ambient } from '@/ui/ambient';
 import { BOTTOM_PAD, SPACE, useColors } from '@/ui/theme';
 
 export default function Profile() {
@@ -16,7 +17,9 @@ export default function Profile() {
   const q = useQuery({ queryKey: ['profile', version], queryFn: async () => buildPortrait(await repo.getPlays(), (await loadReco()).tracks) });
   const p = q.data;
   return (
-    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ paddingTop: insets.top + 14, paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }}>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <Ambient strength={0.75} />
+    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 14, paddingHorizontal: SPACE.page, paddingBottom: BOTTOM_PAD }}>
       <T v="h1" accessibilityRole="header">Профиль</T>
       <View style={{ flexDirection: 'row', gap: 26, marginVertical: 18 }}>
         <View><T v="h1">{p ? Math.round(p.hours) : 0}</T><T v="small" c="muted">часов музыки</T></View>
@@ -32,5 +35,6 @@ export default function Profile() {
       <Row icon="cover" testID="open-settings" title="Настройки" sub="Звук, тема, уведомления, данные" onPress={() => router.push('/settings')} />
       <Row icon="link" title="Что работает и что нет" sub="Ограничения и неподтверждённые возможности" onPress={() => router.push('/limits')} />
     </ScrollView>
+    </View>
   );
 }

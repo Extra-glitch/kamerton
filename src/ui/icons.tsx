@@ -2,11 +2,12 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 export type IconName =
   | 'play' | 'pause' | 'next' | 'prev' | 'shuffle' | 'repeat' | 'repeatOne' | 'heart' | 'heartOn' | 'plus' | 'queue' | 'more' | 'back' | 'down' | 'close'
-  | 'lyrics' | 'video' | 'similar' | 'check' | 'up' | 'search' | 'radio' | 'timer' | 'share' | 'trash' | 'link' | 'thumbDown' | 'cover' | 'fork' | 'volume';
+  | 'lyrics' | 'video' | 'similar' | 'check' | 'up' | 'search' | 'radio' | 'timer' | 'share' | 'trash' | 'link' | 'thumbDown' | 'cover' | 'fork' | 'volume'
+  | 'wave' | 'library' | 'user' | 'sparkle' | 'download' | 'note';
 
-/** Собственный набор значков: единая толщина линии и прямые окончания. */
+/** Собственный набор значков: единая толщина линии и скруглённые окончания. */
 export function Icon({ name, size = 24, color }: { name: IconName; size?: number; color: string }) {
-  const s = { stroke: color, strokeWidth: 1.9, fill: 'none', strokeLinecap: 'square' as const, strokeLinejoin: 'miter' as const };
+  const s = { stroke: color, strokeWidth: 1.9, fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   const f = { fill: color };
   let body: React.ReactNode;
   switch (name) {
@@ -27,7 +28,7 @@ export function Icon({ name, size = 24, color }: { name: IconName; size?: number
     case 'up': body = <Path {...s} d="M5.500 15 12 8.500 18.500 15" />; break;
     case 'close': body = <Path {...s} d="M6 6l12 12M18 6 6 18" />; break;
     case 'lyrics': body = <Path {...s} d="M4 5.500h16M4 10.500h16M4 15.500h10M4 20h6" />; break;
-    case 'video': body = <><Rect {...s} x="3.500" y="5.500" width="17" height="13" /><Path {...f} d="M10 9v6l5-3z" /></>; break;
+    case 'video': body = <><Rect {...s} x="3.500" y="5.500" width="17" height="13" rx="3" /><Path {...f} d="M10 9v6l5-3z" /></>; break;
     case 'similar': body = <><Circle {...s} cx="9" cy="12" r="5.500" /><Circle {...s} cx="15" cy="12" r="5.500" /></>; break;
     case 'check': body = <Path {...s} d="M4.500 12.500 10 18 19.500 7" />; break;
     case 'search': body = <><Circle {...s} cx="10.500" cy="10.500" r="6" /><Path {...s} d="M15 15l5 5" /></>; break;
@@ -37,8 +38,14 @@ export function Icon({ name, size = 24, color }: { name: IconName; size?: number
     case 'trash': body = <Path {...s} d="M4.500 7h15M9.500 7V4h5v3M6.500 7l1 13.500h9l1-13.500" />; break;
     case 'link': body = <Path {...s} d="M14 4.500h5.500V10M19 5l-8.500 8.500M10 6H4.500v13.500H18V14" />; break;
     case 'thumbDown': body = <Path {...s} d="M5 5l14 14M9 4.500h7.500L20 13h-5l1 4.500-2 2.500-3.500-5M4 4.500v9h4" />; break;
-    case 'cover': body = <><Rect {...s} x="4" y="4" width="16" height="16" /><Circle {...s} cx="12" cy="12" r="3.500" /></>; break;
+    case 'cover': body = <><Rect {...s} x="4" y="4" width="16" height="16" rx="3" /><Circle {...s} cx="12" cy="12" r="3.500" /></>; break;
     case 'volume': body = <><Path {...f} d="M4 9.500v5h3.500L12.500 19V5L7.500 9.500z" /><Path {...s} d="M15.500 9a4.200 4.200 0 0 1 0 6M18 6.500a7.800 7.800 0 0 1 0 11" /></>; break;
+    case 'wave': body = <Path {...s} d="M3 12h2.200M7 8v8M10.500 5v14M14 9v6M17.500 6.500v11M21 12h-1.200" />; break;
+    case 'library': body = <><Rect {...s} x="4" y="4" width="4" height="16" rx="1" /><Rect {...s} x="10" y="4" width="4" height="16" rx="1" /><Path {...s} d="M16.300 5.200 20 19" /></>; break;
+    case 'user': body = <><Circle {...s} cx="12" cy="8.500" r="4" /><Path {...s} d="M4.500 20.500c1.200-3.800 4-5.500 7.500-5.500s6.300 1.700 7.500 5.500" /></>; break;
+    case 'sparkle': body = <Path {...s} d="M12 3.500c.8 4.300 2.300 5.800 6.500 6.500-4.200.8-5.700 2.300-6.500 6.500-.8-4.200-2.300-5.700-6.500-6.500 4.200-.7 5.700-2.200 6.500-6.500zM18.500 15.500c.3 1.700.9 2.300 2.500 2.500-1.600.3-2.200.9-2.500 2.500-.3-1.600-.9-2.200-2.500-2.500 1.600-.2 2.200-.8 2.500-2.500z" />; break;
+    case 'download': body = <Path {...s} d="M12 4v11M7.500 10.500 12 15l4.500-4.500M5 19.500h14" />; break;
+    case 'note': body = <><Path {...s} d="M9 18V5.500l10-2V16" /><Circle {...f} cx="6.500" cy="18" r="2.500" /><Circle {...f} cx="16.500" cy="16" r="2.500" /></>; break;
     case 'fork': body = <Path stroke={color} strokeWidth={2.4} fill="none" strokeLinecap="round" d="M8 3v8.500c0 2.400 1.800 4 4 4s4-1.600 4-4V3M12 15.500V21" />; break;
   }
   return <Svg width={size} height={size} viewBox="0 0 24 24">{body}</Svg>;

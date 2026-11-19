@@ -35,8 +35,8 @@ export function parseCsvRows(text: string): string[][] {
 }
 
 const COLUMNS: Record<keyof Partial_, string[]> = {
-  title: ['title', 'track', 'name', 'track name', 'song', 'название', 'трек', 'песня', 'композиция'],
-  artist: ['artist', 'artists', 'artist name', 'artist name(s)', 'performer', 'исполнитель', 'артист'],
+  title: ['title', 'track', 'name', 'track name', 'track title', 'song', 'song name', 'название', 'название трека', 'трек', 'песня', 'композиция'],
+  artist: ['artist', 'artists', 'artist name', 'artist name(s)', 'artist names', 'performer', 'исполнитель', 'исполнители', 'артист', 'артисты'],
   album: ['album', 'album name', 'альбом'],
   durationSec: ['duration', 'length', 'duration_sec', 'duration (ms)', 'track duration (ms)', 'длительность'],
   isrc: ['isrc'],
@@ -80,10 +80,40 @@ function fromObject(o: any): Partial_ {
   };
 }
 
+const TITLE_KEYS = ['title', 'name', 'trackName', 'trackTitle', 'track_name', 'track_title', 'songName'];
+const ARTIST_KEYS = ['artist', 'artists', 'artistName', 'artistNames', 'artist_name', 'performer', 'performers'];
+
+/** Похож ли объект на трек: есть название и исполнитель. */
+function looksLikeTrack(o: any): boolean {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return false;
+  const title = TITLE_KEYS.map((k) => o[k]).find((v) => typeof v === 'string' && v.trim());
+  const artist = ARTIST_KEYS.map((k) => o[k]).find((v) => v && (typeof v === 'string' || Array.isArray(v) || typeof v?.name === 'string'));
+  return !!title && !!artist;
+}
+
+/** Обходит JSON любой формы (например, архив данных сервиса) и собирает всё, что похоже на треки. */
+export function collectJsonTracks(root: unknown, limit = 20000): Partial_[] {
+  const out: Partial_[] = [];
+  const stack: unknown[] = [root];
+  let visited = 0;
+  while (stack.length && out.length < limit && visited < 500000) {
+    const v = stack.pop() as any;
+    visited++;
+    if (!v || typeof v !== 'object') continue;
+    if (Array.isArray(v)) { for (let i = v.length - 1; i >= 0; i--) stack.push(v[i]); continue; }
+    if (v.track && looksLikeTrack(v.track)) { out.push(fromObject({ ...v.track, title: v.track.title ?? v.track.name })); continue; }
+    if (looksLikeTrack(v)) { out.push(fromObject({ ...v, title: TITLE_KEYS.map((k) => v[k]).find((x) => typeof x === 'string'), artist: ARTIST_KEYS.map((k) => v[k]).find(Boolean) })); continue; }
+    const keys = Object.keys(v);
+    for (let i = keys.length - 1; i >= 0; i--) stack.push(v[keys[i]]);
+  }
+  return out;
+}
+
 function parseJson(text: string): Partial_[] {
   const j = JSON.parse(text);
-  const list = Array.isArray(j) ? j : j.tracks ?? j.items ?? j.songs ?? j.playlist?.tracks ?? [];
-  return (list as any[]).map((x) => fromObject(x?.track ?? x));
+  const list = Array.isArray(j) ? j : j.tracks ?? j.items ?? j.songs ?? j.playlist?.tracks ?? null;
+  const direct = Array.isArray(list) ? (list as any[]).map((x) => fromObject(x?.track ?? x)).filter((x) => x.title) : [];
+  return direct.length ? direct : collectJsonTracks(j);
 }
 
 function parseM3u(text: string): Partial_[] {
@@ -120,8 +150,49 @@ function parseXspf(text: string): Partial_[] {
   });
 }
 
+const DURATION_LINE = /^\d{1,2}:\d{2}(?::\d{2})?$/;
+const JUNK_LINE = /^(?:e|explicit|\d{1,4}|слушать|скачать|нравится|мне нравится|ещё|еще|добавить|поделиться|скрыть|играть|перемешать|треки|популярное|сингл|альбом|плейлист|[•·|]|\d+\s+(?:трек|трека|треков|прослушиван).*)$/i;
+const VERSION_LINE = /^(?:\(.*\)|\[.*\]|.*\b(?:remix|ремикс|version|версия|edit|mix|live|acoustic|slowed|sped up|speed up|prod\.?|instrumental|cover|demo)\b.*)$/i;
+
+/**
+ * Список, скопированный со страницы плейлиста в браузере: каждая песня занимает несколько строк
+ * («Название», «Исполнители», иногда «Альбом») и заканчивается длительностью вида 3:05.
+ */
+export function parseCopiedBlocks(text: string): Partial_[] | null {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const durations = lines.reduce<number[]>((a, l, i) => (DURATION_LINE.test(l) ? [...a, i] : a), []);
+  if (durations.length < 2 || durations.length * 6 < lines.length) return null;
+  const blocks: { lines: string[]; dur: string }[] = [];
+  let from = 0;
+  for (const d of durations) {
+    blocks.push({ lines: lines.slice(from, d).filter((l) => !JUNK_LINE.test(l)), dur: lines[d] });
+    from = d + 1;
+  }
+  // Обычная длина блока без заголовка страницы: два поля или три (с альбомом).
+  const lens = blocks.slice(1).map((b) => b.lines.length).filter((n) => n >= 2);
+  const counts = new Map<number, number>();
+  for (const n of lens) counts.set(Math.min(n, 3), (counts.get(Math.min(n, 3)) ?? 0) + 1);
+  const width = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 2;
+  const out: Partial_[] = [];
+  blocks.forEach((b, i) => {
+    let l = i === 0 ? b.lines.slice(-width) : b.lines;
+    if (!l.length) return;
+    if (l.length > width && VERSION_LINE.test(l[1])) l = [`${l[0]} ${/^[([]/.test(l[1]) ? l[1] : `(${l[1]})`}`, ...l.slice(2)];
+    const [title, artist = '', album] = l;
+    out.push({ title, artist, album: width >= 3 ? album : undefined, durationSec: parseDuration(b.dur) });
+  });
+  return out.filter((x) => x.title);
+}
+
+/** Меняет местами исполнителя и название, если список был в порядке «Песня — Исполнитель». */
+export function swapArtistTitle<T extends { title: string; artist: string }>(items: T[]): T[] {
+  return items.map((i) => (i.artist ? { ...i, title: i.artist, artist: i.title } : i));
+}
+
 /** Обычный список: «Исполнитель - Название», по строке на песню. */
 export function parseText(text: string): Partial_[] {
+  const blocks = parseCopiedBlocks(text);
+  if (blocks?.length) return blocks;
   return text.split(/\r?\n/).map((l) => l.replace(/^\s*(?:\d+[.)]\s*|[-•*]\s+)/, '').trim()).filter(Boolean).map((line) => {
     const parts = line.split(/\s+[-–—]\s+/);
     return parts.length > 1 ? { artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() } : { artist: '', title: line };

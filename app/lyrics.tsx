@@ -9,6 +9,7 @@ import { pickTextFile } from '@/platform/localMusic';
 import { attachLyricsText, loadLyrics } from '@/services/media';
 import { player, toast, usePlayer } from '@/state/app';
 import { Btn, IconBtn, Loading, T } from '@/ui/kit';
+import { Ambient } from '@/ui/ambient';
 import { TYPE, useColors } from '@/ui/theme';
 
 export default function LyricsScreen() {
@@ -37,6 +38,7 @@ export default function LyricsScreen() {
   };
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <Ambient animate strength={0.9} />
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: insets.top + 4, paddingHorizontal: 8 }}>
         <IconBtn name="down" label="Закрыть текст" onPress={() => router.back()} />
         <View style={{ flex: 1 }}><T v="title" numberOfLines={1}>{t?.title}</T><T v="small" c="muted" numberOfLines={1}>{t?.artist}</T></View>
@@ -45,7 +47,7 @@ export default function LyricsScreen() {
         {q.isLoading ? <Loading /> : null}
         {lyrics?.lines.map((l, i) => {
           const on = i === cur;
-          const body = <T style={[TYPE.h2, { color: on ? c.accent : lyrics.synced ? (i < cur ? c.faint : c.muted) : c.text, marginBottom: 12 }]}>{l.text || ' '}</T>;
+          const body = <T style={[{ fontFamily: 'Body-700', fontSize: 24, lineHeight: 32 }, { color: on ? c.accent : lyrics.synced ? (i < cur ? c.faint : c.muted) : c.text, marginBottom: 12 }]}>{l.text || ' '}</T>;
           return lyrics.synced
             ? <Pressable key={i} accessibilityRole="button" onLayout={(e) => { offsets.current[i] = e.nativeEvent.layout.y; }} onPress={() => void player.seek((l.timeMs ?? 0) / 1000)}>{body}</Pressable>
             : <View key={i}>{body}</View>;

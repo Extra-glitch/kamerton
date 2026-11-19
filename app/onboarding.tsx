@@ -6,6 +6,7 @@ import { GENRES } from '@/core/genres';
 import { useSettings } from '@/state/settings';
 import { Btn, Chip, Field, T } from '@/ui/kit';
 import { Dial } from '@/ui/music';
+import { Ambient } from '@/ui/ambient';
 import { useColors } from '@/ui/theme';
 
 export default function Onboarding() {
@@ -20,7 +21,9 @@ export default function Onboarding() {
     router.replace('/');
   };
   return (
-    <ScrollView style={{ backgroundColor: c.bg }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 30 }}>
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <Ambient animate />
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingTop: insets.top + 24, paddingBottom: insets.bottom + 30 }}>
       <T v="poster" adjustsFontSizeToFit numberOfLines={1} style={{ marginLeft: -3 }}>Камертон</T>
       <T style={{ marginTop: 6, maxWidth: 440 }}>Настроим первый поток. Точным он станет не сразу: приложение учится на том, что вы слушаете, лайкаете и пропускаете.</T>
       <T v="h2" style={{ marginTop: 30, marginBottom: 12 }}>Что вам близко?</T>
@@ -35,5 +38,6 @@ export default function Onboarding() {
       <Btn testID="onboarding-done" label="Начать слушать" onPress={finish} style={{ marginTop: 28 }} />
       <T v="small" c="muted" style={{ marginTop: 14 }}>Сразу работают Audius, Internet Archive, Radio Browser и файлы на телефоне. Jamendo и свой сервер подключаются в профиле.</T>
     </ScrollView>
+    </View>
   );
 }

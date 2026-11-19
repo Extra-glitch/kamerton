@@ -37,7 +37,9 @@ export default function Settings() {
       <H>Версии песен</H>
       <Choice value={s.versionFilter} onChange={(versionFilter) => { s.set({ versionFilter }); bumpData(); }} options={[{ value: 'original_first', label: 'Сначала оригинал' }, { value: 'all', label: 'Без предпочтений' }, { value: 'clean_only', label: 'Сначала без мата' }]} />
       <T v="small" c="muted" style={{ marginTop: 8 }}>Композиции с пометкой Explicit не скрываются. Цензурированная версия не подставляется вместо оригинала.</T>
-      <SwitchRow title="Только полные треки" sub="В поиске не показывать фрагменты и внешние ссылки" value={s.onlyFull} onChange={(onlyFull) => s.set({ onlyFull })} />
+      <SwitchRow title="Только полные треки" sub="В поиске не показывать фрагменты и внешние ссылки" value={s.fullOnly} onChange={(fullOnly) => s.set({ fullOnly })} />
+      <SwitchRow title="Цвета обложки" sub="Фон и акцент приложения подстраиваются под играющий трек" value={s.coverColors} onChange={(coverColors) => s.set({ coverColors })} />
+      <SwitchRow title="Анимации" sub="Плавный фон и пульсация кнопки. Если в системе включено «Уменьшить движение», они отключаются сами" value={s.animations} onChange={(animations) => s.set({ animations })} />
 
       <H>Рекомендации и данные</H>
       <SwitchRow title="Записывать историю" sub="Без неё рекомендации перестают учиться" value={s.recordHistory} onChange={(recordHistory) => s.set({ recordHistory })} />

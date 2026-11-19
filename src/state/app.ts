@@ -62,6 +62,8 @@ export function boot(): Promise<void> {
       resolve: resolveStream,
       async recordPlay(p, bucket) {
         if (!settings().recordHistory) return;
+        // Фрагменты не считаются прослушиваниями: иначе 30 секунд выглядели бы как пропуск.
+        if (adapter(p.sourceTrackId.split(':')[0])?.capabilities.playback === 'preview-only') return;
         await repo.addPlay(p);
         invalidateReco();
         if (bucket) {

@@ -1,43 +1,90 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
+import { Linking, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { normalizeText, primaryArtist } from '@/core/text';
 import * as repo from '@/db/repo';
 import { friendlyError } from '@/net/http';
-import { artistTracks, federatedSearch } from '@/services/media';
-import { bumpData, playTracks, toast, useUi } from '@/state/app';
-import { Btn, Empty, Loading, Notice, Screen, T } from '@/ui/kit';
-import { TrackList } from '@/ui/music';
+import { adapter, LISTEN_ELSEWHERE, playMode } from '@/sources/registry';
+import { artistPage } from '@/services/media';
+import { bumpData, toast, useUi } from '@/state/app';
+import { Ambient } from '@/ui/ambient';
+import { Btn, Chip, Cover, Empty, Loading, Notice, Press, RoundBtn, Section, Shelf, s as ks, T } from '@/ui/kit';
+import { playOrOpen, TrackList } from '@/ui/music';
+import { BOTTOM_PAD, SPACE, useColors } from '@/ui/theme';
+
+/** Широкий шрифт заголовка: длинные имена уменьшаем заранее, чтобы слово не разрывалось. */
+const nameSize = (name: string) => {
+  const longest = Math.max(...name.split(/\s+/).map((w) => w.length));
+  const size = longest > 9 ? Math.max(22, Math.floor(40 * 9 / longest)) : 40;
+  return { fontSize: size, lineHeight: Math.round(size * 1.15) };
+};
 
 export default function Artist() {
-  const p = useLocalSearchParams<{ name: string; source?: string; id?: string }>();
+  const c = useColors();
+  const insets = useSafeAreaInsets();
+  const p = useLocalSearchParams<{ name: string; deezer?: string }>();
   const name = primaryArtist(p.name);
   const v = useUi((u) => u.dataVersion);
+  const [more, setMore] = useState(false);
   const q = useQuery({
-    queryKey: ['artist', name, p.source, p.id, v],
+    queryKey: ['artist', name, p.deezer],
     queryFn: async () => {
-      const key = normalizeText(name);
-      const direct = p.source && p.id ? await artistTracks(p.source, p.id).catch(() => []) : [];
-      const found = await federatedSearch(name, { limit: 20 });
-      const known = await repo.getViews(await repo.tracksByArtistName(name));
-      const seen = new Set<string>();
-      const all = [...direct, ...known, ...found.tracks.filter((t) => normalizeText(primaryArtist(t.artist)) === key)].filter((t) => !t.preferred?.isLive && !seen.has(t.id) && !!seen.add(t.id));
-      return { tracks: all, errors: found.errors, followed: (await repo.followedArtists()).some((a) => a.key === key) };
+      const page = await artistPage(name, p.deezer);
+      const known = (await repo.getViews(await repo.tracksByArtistName(name))).filter((t) => t.preferred && playMode(t.preferred) === 'player');
+      const seen = new Set(page.free.map((t) => t.id));
+      return { ...page, free: [...known.filter((t) => !seen.has(t.id)), ...page.free] };
     },
   });
-  const tracks = q.data?.tracks ?? [];
+  const followed = useQuery({ queryKey: ['followed', name, v], queryFn: async () => (await repo.followedArtists()).some((a) => a.key === normalizeText(name)) });
+  const d = q.data;
+  const title = d?.ref?.name ?? name;
+  const image = d?.ref?.imageUrl;
+  const playAll = () => {
+    const list = d?.free.length ? d.free : d?.top ?? [];
+    if (list.length) playOrOpen(list, 0, 'artist');
+  };
   return (
-    <Screen>
-      <T v="poster" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.45} style={{ marginBottom: 14 }}>{name}</T>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Btn label="Слушать" icon="play" disabled={!tracks.length} onPress={() => void playTracks(tracks.filter((t) => t.preferred?.availability === 'full'), 0, 'artist')} style={{ flex: 1 }} />
-        <Btn label={q.data?.followed ? 'Вы подписаны' : 'Следить за релизами'} kind="line" onPress={async () => { if (q.data?.followed) await repo.unfollowArtist(name); else { await repo.followArtist(name); toast('Новые релизы появятся в подборке'); } bumpData(); }} />
-      </View>
-      {q.isLoading ? <Loading /> : null}
-      {q.isError ? <Notice tone="danger" text={friendlyError(q.error)} /> : null}
-      {q.data?.errors.map((e) => <Notice key={e.source} tone="warn" text={`${e.source}: ${e.message}`} />)}
-      <View style={{ height: 16 }} />
-      {tracks.length ? <TrackList tracks={tracks} context="artist" /> : q.data ? <Empty title="Треков не нашлось" text="Этого исполнителя нет в подключённых источниках." /> : null}
-    </Screen>
+    <View style={{ flex: 1 }}>
+      <Ambient strength={0.7} />
+      <ScrollView contentContainerStyle={{ paddingBottom: BOTTOM_PAD }}>
+        <View style={{ height: 300 + insets.top, justifyContent: 'flex-end', paddingHorizontal: SPACE.page, paddingBottom: 16 }}>
+          {image ? <Image source={image} blurRadius={2} contentFit="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} accessibilityIgnoresInvertColors /> : null}
+          <LinearGradient colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.15)', c.bg]} locations={[0, 0.45, 1]} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          <View style={{ position: 'absolute', top: insets.top + 6, left: SPACE.page - 4 }}><RoundBtn name="back" label="Назад" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} /></View>
+          {!image ? <Cover title={title} size={120} radius={60} style={{ marginBottom: 14 }} /> : null}
+          <T v="poster" numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6} style={{ color: image ? '#ffffff' : c.text, ...nameSize(title) }}>{title}</T>
+          {d?.ref?.followers ? <T v="small" style={{ color: image ? 'rgba(255,255,255,0.85)' : c.muted }}>{d.ref.followers.toLocaleString('ru-RU')} слушателей в Deezer</T> : null}
+        </View>
+        <View style={{ paddingHorizontal: SPACE.page }}>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Btn label={d?.free.length ? 'Слушать' : 'Фрагменты'} icon="play" disabled={!d || (!d.free.length && !d.top.length)} onPress={playAll} style={{ flex: 1 }} />
+            <Btn label={followed.data ? 'Вы следите' : 'Следить'} icon={followed.data ? 'check' : 'plus'} kind="line" style={{ flex: 1 }} onPress={async () => { if (followed.data) await repo.unfollowArtist(name); else { await repo.followArtist(name); toast('Новые релизы появятся в подборке'); } bumpData(); }} />
+          </View>
+          <T v="small" c="muted" style={{ marginTop: 14, marginBottom: 8 }}>Полностью {title} можно слушать по подписке:</T>
+          <View style={ks.wrap}>{LISTEN_ELSEWHERE.map((id) => adapter(id)).filter((a) => a?.externalUrl).map((a) => <Chip key={a!.id} icon="link" label={a!.name} onPress={() => { const u = a!.externalUrl!({ title: '', artist: title }); if (u) void Linking.openURL(u); }} />)}</View>
+
+          {q.isLoading ? <Loading label="Собираем популярное, альбомы и то, что играет целиком" /> : null}
+          {q.isError ? <Notice tone="danger" text={friendlyError(q.error)} /> : null}
+          {d?.errors.map((e) => <Notice key={e} tone="warn" text={e} />)}
+
+          {d?.free.length ? <Section title="Целиком в Камертоне" note="С телефона, вашего сервера и свободных каталогов"><TrackList tracks={d.free} context="artist" /></Section> : null}
+          {d?.top.length ? <Section title="Популярное" note="Фрагменты по 30 секунд из каталога Deezer">
+            <TrackList tracks={more ? d.top : d.top.slice(0, 10)} context="artist" numbered />
+            {!more && d.top.length > 10 ? <Btn label={`Ещё ${d.top.length - 10}`} kind="line" onPress={() => setMore(true)} style={{ marginTop: 8 }} /> : null}
+          </Section> : null}
+          {d?.albums.length ? <Section title="Альбомы и синглы"><Shelf>{d.albums.map((a) => (
+            <Press key={a.id} accessibilityRole="link" onPress={() => router.push({ pathname: '/album/[source]/[id]', params: { source: a.source, id: a.id, title: a.title } })} style={{ width: 150 }}>
+              <Cover uri={a.coverUrl} title={a.title} size={150} radius={18} />
+              <T v="title" numberOfLines={1} style={{ marginTop: 7 }}>{a.title}</T>
+              <T v="small" c="muted" numberOfLines={1}>{[a.year, a.kind === 'single' ? 'сингл' : a.kind === 'ep' ? 'EP' : a.kind === 'album' ? 'альбом' : null].filter(Boolean).join(', ')}</T>
+            </Press>))}</Shelf></Section> : null}
+          {d && !d.free.length && !d.top.length ? <Empty title="Ничего не нашлось" text="Каталог и подключённые источники не знают этого исполнителя. Проверьте написание имени." /> : null}
+        </View>
+      </ScrollView>
+    </View>
   );
 }

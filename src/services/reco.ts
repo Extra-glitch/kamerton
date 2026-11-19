@@ -194,7 +194,7 @@ export async function loadHome(): Promise<HomeData> {
 
 // ---------- Новые релизы любимых исполнителей ----------
 
-export interface ReleaseEntry { artist: string; title: string; date?: string; kind: 'playable' | 'announced'; trackId?: string; note?: string }
+export interface ReleaseEntry { artist: string; title: string; date?: string; kind: 'playable' | 'catalog' | 'announced'; trackId?: string; note?: string; album?: { source: string; id: string; coverUrl?: string } }
 const RELEASE_WINDOW = 180 * 86_400_000;
 
 export async function newReleases(force = false): Promise<ReleaseEntry[]> {
@@ -218,6 +218,18 @@ export async function newReleases(force = false): Promise<ReleaseEntry[]> {
       if (seen.has(id)) continue;
       seen.add(id);
       list.push({ artist, title: t.title, date: t.releaseDate, kind: 'playable', trackId: id });
+    }
+    const dz = adapter('deezer');
+    if (dz && (await dz.status(ctx)).state === 'ready') {
+      try {
+        const hit = (await dz.search!(ctx, artist, 5)).artists.find((a) => similarity(a.name, artist) >= 0.92);
+        for (const al of hit ? await dz.artistAlbums!(ctx, hit.id) : []) {
+          const released = al.releaseDate;
+          if (!released || now - Date.parse(released) > RELEASE_WINDOW || now < Date.parse(released) - 86_400_000 * 60) continue;
+          if (list.some((x) => x.artist === artist && similarity(x.title, al.title) > 0.92)) continue;
+          list.push({ artist, title: al.title, date: released, kind: 'catalog', album: { source: 'deezer', id: al.id, coverUrl: al.coverUrl }, note: 'Каталог Deezer: фрагменты и ссылки на полную версию' });
+        }
+      } catch { /* каталог необязателен для этого экрана */ }
     }
     if (settings().musicBrainzEnabled) {
       try {

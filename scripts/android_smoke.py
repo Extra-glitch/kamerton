@@ -279,6 +279,65 @@ def scenario():
         ok, st = False, []
     screenshot("05-wave")
     record("Волна играет из интернета", ok, json.dumps(st, ensure_ascii=False), required=False)
+    mini = find(screen(), "Открыть плеер", exact=False)
+    if mini:
+        tap(mini)
+        time.sleep(3)
+        screenshot("06-player")
+        shell("input keyevent KEYCODE_BACK")
+        time.sleep(1)
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    catalog_checks()
+
+
+def type_into(field_label, text):
+    """Вводит текст в поле: сначала очищает его сочетанием Ctrl+A и удалением."""
+    field = find(screen(), field_label, exact=False)
+    if not field:
+        return False
+    tap(field)
+    shell("input keycombination 113 29", check=False)
+    shell("input keyevent 67", check=False)
+    shell(f"input text '{text}'")
+    return True
+
+
+def catalog_checks():
+    """Поиск российского исполнителя через каталог, фрагмент и ссылка SoundCloud. Нужен доступ к этим сервисам из сети GitHub."""
+    tab = wait("Поиск", 20)
+    if not tab:
+        record("Каталог находит российских исполнителей", False, "нет раздела Поиск", required=False)
+        return
+    tap(tab)
+    typed = type_into("Песня, исполнитель или ссылка", "Morgenshtern")
+    artist = wait("Исполнитель", 40, exact=False) if typed else None
+    screenshot("07-search-catalog")
+    record("Каталог находит российских исполнителей", artist, "", required=False)
+    row = wait(", фрагмент", 10, exact=False)
+    if row:
+        tap(row)
+        ok, st = wait_session(is_playing, 30)
+        record("Фрагмент из каталога играет", ok, json.dumps(st, ensure_ascii=False), required=False)
+        shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    opened = find(screen(), "Открыть")
+    if opened:
+        tap(opened)
+        page = wait("Популярное", 30)
+        time.sleep(2)
+        screenshot("08-artist")
+        record("Страница исполнителя из каталога", page, required=False)
+        shell("input keyevent KEYCODE_BACK")
+        time.sleep(1)
+    if type_into("Morgenshtern", "https://soundcloud.com/forss/flickermood") or type_into("Песня, исполнитель или ссылка", "https://soundcloud.com/forss/flickermood"):
+        row = wait("Flickermood", 40, exact=False)
+        record("SoundCloud по ссылке распознаётся", row, required=False)
+        if row:
+            tap(row)
+            embed = wait("В России нужен VPN", 20, exact=False)
+            time.sleep(6)
+            screenshot("09-embed")
+            record("Открывается встроенный плеер SoundCloud", embed, required=False)
+            shell("input keyevent KEYCODE_BACK")
 
 
 def print_images():

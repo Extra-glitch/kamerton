@@ -21,6 +21,7 @@ export default function Review() {
   const [filter, setFilter] = useState<Filter>('all');
   const [name, setName] = useState(draft?.name ?? 'Импорт');
   const [saving, setSaving] = useState(false);
+  const [limit, setLimit] = useState(80);
   const s = useMemo(() => summarize(rows), [rows]);
   if (!draft) return <Screen title="Проверка"><Empty title="Нет данных" text="Начните импорт заново." action="К импорту" onAction={() => router.replace('/import')} /></Screen>;
   const update = (i: number, patch: Partial<ImportRow>) => setRows((all) => all.map((r) => (r.item.position === i ? { ...r, ...patch } : r)));
@@ -32,11 +33,11 @@ export default function Review() {
         <View><T v="h1" c="warn">{s.doubtful}</T><T v="small" c="muted">сомнительно</T></View>
         <View><T v="h1" c="danger">{s.missing}</T><T v="small" c="muted">нет</T></View>
       </View>
-      <Notice text="Сомнительные песни не добавляются сами: подтвердите их или выберите другой вариант. Ненайденные останутся в плейлисте на своих местах." />
+      <Notice text="Сомнительные песни не добавляются сами: подтвердите их или выберите другой вариант. Ненайденные останутся в плейлисте на своих местах. Песни из каталога Deezer играют фрагментом, а полностью открываются в Яндекс Музыке, VK или Звуке. Если потом добавите эти песни файлами на телефон, они сами заиграют целиком." />
       <View style={[ks.wrap, { marginBottom: 12 }]}>
-        {([['all', 'Все'], ['matched', 'Найдено'], ['doubtful', 'Сомнительно'], ['missing', 'Не найдено']] as [Filter, string][]).map(([f, l]) => <Chip key={f} label={l} on={filter === f} onPress={() => setFilter(f)} />)}
+        {([['all', 'Все'], ['matched', 'Найдено'], ['doubtful', 'Сомнительно'], ['missing', 'Не найдено']] as [Filter, string][]).map(([f, l]) => <Chip key={f} label={l} on={filter === f} onPress={() => { setFilter(f); setLimit(80); }} />)}
       </View>
-      {rows.filter((r) => filter === 'all' || group(r) === filter).map((r) => {
+      {rows.filter((r) => filter === 'all' || group(r) === filter).slice(0, limit).map((r) => {
         const ok = r.best && r.decision !== 'reject' && (r.status === 'matched' || r.decision === 'accept');
         return (
           <View key={r.item.position} style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: c.line }}>
@@ -55,9 +56,10 @@ export default function Review() {
           </View>
         );
       })}
+      {rows.filter((r) => filter === 'all' || group(r) === filter).length > limit ? <Btn label="Показать ещё 80" kind="line" onPress={() => setLimit(limit + 80)} style={{ marginTop: 10 }} /> : null}
       <View style={{ marginTop: 22 }}>
         <Field label="Название плейлиста" value={name} onChangeText={setName} />
-        <Btn testID="import-save" label={`Создать плейлист: ${accepted} из ${rows.length} можно слушать`} busy={saving} disabled={!name.trim()} onPress={async () => {
+        <Btn testID="import-save" label={`Создать плейлист: найдено ${accepted} из ${rows.length}`} busy={saving} disabled={!name.trim()} onPress={async () => {
           setSaving(true);
           try { const id = await savePlaylistFromDraft({ ...draft, rows }, name.trim()); bumpData(); toast('Плейлист создан'); router.replace({ pathname: '/playlist/[id]', params: { id } }); }
           catch (e) { toast((e as Error).message); setSaving(false); }

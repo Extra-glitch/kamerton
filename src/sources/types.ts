@@ -60,7 +60,7 @@ export interface SourceDoc {
   docsUrl?: string;
 }
 
-export interface AlbumRef { source: SourceId; id: string; title: string; artist: string; coverUrl?: string; year?: number; trackCount?: number }
+export interface AlbumRef { source: SourceId; id: string; title: string; artist: string; coverUrl?: string; year?: number; releaseDate?: string; trackCount?: number; kind?: string }
 export interface ArtistRef { source: SourceId; id: string; name: string; imageUrl?: string; followers?: number }
 export interface PlaylistRef { source: SourceId; id: string; title: string; owner?: string; coverUrl?: string; trackCount?: number }
 
@@ -103,6 +103,9 @@ export interface MusicSourceAdapter {
   discover?(ctx: SourceContext, req: DiscoverRequest): Promise<RemoteTrack[]>;
   albumTracks?(ctx: SourceContext, albumId: string): Promise<RemoteTrack[]>;
   artistTracks?(ctx: SourceContext, artistId: string): Promise<RemoteTrack[]>;
+  artistAlbums?(ctx: SourceContext, artistId: string): Promise<AlbumRef[]>;
+  /** Лёгкий поиск только по трекам: для сопоставления больших плейлистов. */
+  searchTracks?(ctx: SourceContext, q: string, limit: number): Promise<RemoteTrack[]>;
   userPlaylists?(ctx: SourceContext): Promise<PlaylistRef[]>;
   playlistTracks?(ctx: SourceContext, id: string): Promise<RemoteTrack[]>;
   likedTracks?(ctx: SourceContext): Promise<RemoteTrack[]>;

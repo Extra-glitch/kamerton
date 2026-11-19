@@ -10,7 +10,12 @@ export interface Settings {
   theme: 'system' | 'dark' | 'light';
   discovery: number;
   versionFilter: VersionFilter;
-  onlyFull: boolean;
+  /** В поиске показывать только то, что играет целиком. */
+  fullOnly: boolean;
+  /** Подкрашивать приложение цветами обложки текущего трека. */
+  coverColors: boolean;
+  /** Фоновые анимации. Системная настройка «Уменьшить движение» учитывается всегда. */
+  animations: boolean;
   qualityWifi: QualityPreference;
   qualityCell: QualityPreference;
   fade: boolean;
@@ -27,7 +32,7 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
-  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', onlyFull: true,
+  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true,
   qualityWifi: 'lossless', qualityCell: 'normal', fade: false, volume: 1, recordHistory: true, videoEnabled: true, lrclibEnabled: false,
   musicBrainzEnabled: true, listenBrainzEnabled: true, dailyNotification: false, seedTags: [], seedArtists: [], sourcePriority: DEFAULT_PRIORITY,
 };

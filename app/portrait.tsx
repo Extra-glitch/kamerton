@@ -27,7 +27,7 @@ export default function PortraitScreen() {
         {p.topTags.length ? <View style={{ marginTop: 32 }}>
           <T v="h2" style={{ marginBottom: 10 }}>Ваш звук</T>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 12 }}>
-            {p.topTags.map((t, i) => { const size = 22 + 44 * (t.share / maxTag); return <T key={t.name} style={{ fontFamily: FONT.d8, fontSize: size, lineHeight: size * 1.04, color: i === 0 ? c.accent : i < 4 ? c.text : c.muted }}>{t.name}</T>; })}
+            {p.topTags.map((t, i) => { const size = 16 + 22 * (t.share / maxTag); return <T key={t.name} style={{ fontFamily: FONT.d8, fontSize: size, lineHeight: size * 1.04, color: i === 0 ? c.accent : i < 4 ? c.text : c.muted }}>{t.name}</T>; })}
           </View>
         </View> : null}
         <View style={{ marginTop: 32 }}>

@@ -21,6 +21,7 @@ export interface MatchDeps {
   searchers: ((q: string) => Promise<RemoteTrack[]>)[];
   musicBrainz?: MusicBrainzClient;
   onProgress?: (done: number, total: number) => void;
+  concurrency?: number;
 }
 
 export async function matchItem(item: ImportItem, deps: MatchDeps): Promise<ImportRow> {
@@ -60,7 +61,7 @@ function capNoArtist(r: MatchResult): MatchResult {
 
 export async function matchAll(items: ImportItem[], deps: MatchDeps): Promise<ImportRow[]> {
   let done = 0;
-  return mapLimit(items, 3, async (item) => {
+  return mapLimit(items, deps.concurrency ?? 3, async (item) => {
     const row = await matchItem(item, deps);
     deps.onProgress?.(++done, items.length);
     return row;
