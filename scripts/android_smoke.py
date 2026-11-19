@@ -392,29 +392,31 @@ def telegram_checks():
     if ask:
         named = False
         if type_into("Например: Земфира", "Zemfira Iskala"):
+            time.sleep(2)
+            shell("input keyevent 4")  # спрятать клавиатуру: под ней результаты не видны
             hit = None
             end = time.time() + 40
             while time.time() < end and not hit:
-                hit = next((n for n in screen() if ("Zemfira" in n["desc"] or "Земфира" in n["desc"]) and "—" in n["desc"]), None)
-                time.sleep(1.5)
+                hit = scroll_to_part("Земфира — ", attempts=2) or scroll_to_part("Zemfira — ", attempts=1)
+                time.sleep(1)
             screenshot("06d-identify-results")
             if hit:
-                shell("input keyevent 4")  # спрятать клавиатуру
-                time.sleep(1)
-                hit = next((n for n in screen() if ("Zemfira" in n["desc"] or "Земфира" in n["desc"]) and "—" in n["desc"]), hit)
                 tap(hit, "найденная песня")
                 named, st = wait_session(lambda s: ("Искала" in s["title"] or "Iskala" in s["title"]), 20)
-                record("Название и обложка подставляются из каталога", named, json.dumps(st, ensure_ascii=False), required=False)
-        if not named:
-            if find(screen(), "Что это за песня?") or wait("Что это за песня?", 5):
-                type_into("Название песни", "Manual Title")
-                type_into("Кто исполняет", "Manual Artist")
-                shell("input keyevent 4")
-                save = scroll_to_part("Сохранить название")
-                if save:
-                    tap(save)
-                ok2, st = wait_session(lambda s: "Manual Title" in s["title"], 20)
-                record("Название вписывается вручную и сразу видно в уведомлении", ok2, json.dumps(st, ensure_ascii=False), required=False)
+            record("Название и обложка подставляются из каталога", named, json.dumps(st, ensure_ascii=False) if hit else "в каталоге не нашлось", required=False)
+        if not named and (find(screen(), "Вписать вручную") or scroll_to_part("Вписать вручную", attempts=4)):
+            for placeholder, value in (("Название песни", "Manual Title"), ("Кто исполняет", "Manual Artist")):
+                field = scroll_to_part(placeholder, attempts=3)
+                if field:
+                    tap(field)
+                    shell(f"input text '{value.replace(' ', '%s')}'")
+                    shell("input keyevent 4")
+                    time.sleep(1)
+            save = scroll_to_part("Сохранить название", attempts=3)
+            if save:
+                tap(save)
+            ok2, st = wait_session(lambda s: "Manual Title" in s["title"], 20)
+            record("Название вписывается вручную и сразу видно в уведомлении", ok2, json.dumps(st, ensure_ascii=False), required=False)
         time.sleep(2)
         screenshot("06e-identified")
     shell("input keyevent KEYCODE_MEDIA_PAUSE")

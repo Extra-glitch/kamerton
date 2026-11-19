@@ -54,3 +54,21 @@ describe.runIf(process.env.LIVE)('Openverse на настоящем API', () => 
     expect(String(r.tracks[0].extra?.stream)).toMatch(/^https?:\/\//);
   }, 60000);
 });
+
+describe.runIf(process.env.LIVE)('Openverse: только музыка и честные пометки', () => {
+  it('в выдаче нет звуковых эффектов, у Jamendo нет офлайна, у каждой песни есть лицензия и страница оригинала', async () => {
+    const { openverse } = await import('@/sources/openverse');
+    const { memoryCtx } = await import('../helpers');
+    for (const q of ['rain', 'piano']) {
+      const r = await openverse.search!(memoryCtx(), q, 20);
+      const byProvider: Record<string, number> = {};
+      for (const t of r.tracks) byProvider[String(t.extra?.provider)] = (byProvider[String(t.extra?.provider)] ?? 0) + 1;
+      console.log(`OPENVERSE «${q}» → ${r.tracks.length}, площадки: ${JSON.stringify(byProvider)}, офлайн: ${r.tracks.filter((t) => t.canOffline).length}`);
+      for (const t of r.tracks) {
+        expect(t.extra?.category).toBe('music');
+        expect(t.attribution).toMatch(/Openverse/);
+        if (t.extra?.provider === 'jamendo') expect(t.canOffline).toBe(false);
+      }
+    }
+  }, 60000);
+});
