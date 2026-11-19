@@ -50,7 +50,7 @@ function SourceRow({ id, name, detail, ready, can, on, onToggle }: { id: string;
         <T v="strong" style={{ flex: 1 }} numberOfLines={1} onPress={() => router.push({ pathname: '/sources/[id]', params: { id } })}>{name}</T>
         <Switch testID={`toggle-${id}`} accessibilityLabel={`${name}: ${on ? 'включён' : 'выключен'}`} value={on} onValueChange={onToggle} trackColor={{ true: c.accent, false: c.line }} thumbColor={on ? c.onAccent : c.muted} />
       </View>
-      <T v="small" c="muted" numberOfLines={2}>{on ? detail : 'Выключен: не ищет и не играет'}</T>
+      {!on || detail ? <T v="small" c="muted" numberOfLines={2}>{on ? detail : 'Выключен: не ищет и не играет'}</T> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
         {on ? <Badge label={ready ? 'подключён' : 'нужна настройка'} tone={ready ? 'ok' : 'faint'} /> : null}
         {ABILITY.map(([k, label]) => <Badge key={k} label={`${can[k] ? '✓' : '✕'} ${label}`} tone={can[k] ? 'ok' : 'faint'} />)}
