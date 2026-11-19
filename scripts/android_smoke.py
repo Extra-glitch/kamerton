@@ -402,7 +402,8 @@ def telegram_checks():
             screenshot("06d-identify-results")
             if hit:
                 tap(hit, "найденная песня")
-                named, st = wait_session(lambda s: ("Искала" in s["title"] or "Iskala" in s["title"]), 20)
+                # Каталог может писать название заглавными («ИСКАЛА»), поэтому сравниваем без учёта регистра.
+                named, st = wait_session(lambda s: "искала" in s["title"].lower() or "iskala" in s["title"].lower(), 20)
             record("Название и обложка подставляются из каталога", named, json.dumps(st, ensure_ascii=False) if hit else "в каталоге не нашлось", required=False)
         if not named and (find(screen(), "Вписать вручную") or scroll_to_part("Вписать вручную", attempts=4)):
             for placeholder, value in (("Название песни", "Manual Title"), ("Кто исполняет", "Manual Artist")):
