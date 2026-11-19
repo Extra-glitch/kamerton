@@ -41,12 +41,19 @@ function ProviderPill({ r, on, onPress }: { r: ProviderRun; on: boolean; onPress
 
 /** Главное, что нужно для прослушивания целиком: подключить YouTube. */
 function FullListeningCard() {
+  const c = useColors();
+  // Компактная строка, а не большое окно: она не должна отодвигать результаты поиска.
   return (
-    <Glass style={{ padding: 16, marginTop: 10 }} testID="connect-youtube-card">
-      <T v="h3">Слушать песни целиком</T>
-      <T v="small" c="muted" style={{ marginTop: 4 }}>Сейчас песни из каталога звучат фрагментом 30 секунд. Подключите YouTube: это бесплатно и занимает около 5 минут. После этого найденные песни будут играть полностью.</T>
-      <Btn testID="connect-youtube" label="Подключить YouTube" icon="link" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
-    </Glass>
+    <Press testID="connect-youtube" accessibilityRole="button" accessibilityLabel="Подключить YouTube, чтобы песни играли целиком" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginTop: 8 }}>
+      <Glass radius={16} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14 }}>
+        <View style={{ flex: 1 }}>
+          <T v="strong">Песни звучат фрагментом 30 секунд</T>
+          <T v="small" c="muted">Подключите YouTube (бесплатно), чтобы слушать целиком</T>
+        </View>
+        <T v="strong" c="accent">Подключить</T>
+        <Icon name="forward" size={18} color={c.accent} />
+      </Glass>
+    </Press>
   );
 }
 

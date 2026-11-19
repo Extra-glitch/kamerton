@@ -99,7 +99,9 @@ export async function searchLink(url: string): Promise<{ title: string; tracks: 
   const a = ADAPTERS.find((x) => x.canHandleLink?.(u) && x.resolveLink);
   if (!a) throw new Error('Такие ссылки пока не поддерживаются. Работают SoundCloud, YouTube, Deezer, Audius и Internet Archive.');
   const st = await a.status(ctx);
-  if (st.state !== 'ready' && st.state !== 'link_only') throw new Error(`Сначала подключите ${a.name} в разделе «Источники музыки».`);
+  // Ссылки SoundCloud и YouTube открываются и без ключа: во встроенном плеере самого сервиса.
+  const keyless = a.id === 'soundcloud' || a.id === 'youtube';
+  if (st.state !== 'ready' && st.state !== 'link_only' && !keyless) throw new Error(`Сначала подключите ${a.name} в разделе «Источники музыки».`);
   const r = await a.resolveLink!(ctx, u);
   if (!r?.tracks.length) throw new Error('По ссылке ничего не нашлось.');
   return { title: r.title, tracks: await repo.getViews(await upsertFrom(a, r.tracks, { pool: true })), source: a.id };

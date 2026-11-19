@@ -330,7 +330,7 @@ def catalog_checks():
         soft_diagnostics()
     shell("input keyevent 66")  # кнопка «Найти» на клавиатуре прячет её, иначе строки под ней
     time.sleep(1)
-    opened = find(screen(), "Открыть исполнителя", exact=False)
+    opened = scroll_to_part("Открыть исполнителя")
     if opened:
         tap(opened)
         page = wait("Популярное", 30)
