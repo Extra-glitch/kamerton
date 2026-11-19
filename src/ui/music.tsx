@@ -49,13 +49,13 @@ export function TrackRow({ t, onPress, note, index, right, testID }: { t: TrackV
   const mark = src ? versionMark(src) : null;
   const blocked = src && src.availability !== 'full';
   return (
-    <Pressable testID={testID} onPress={onPress} onLongPress={() => openSheet(t)} accessibilityRole="button" accessibilityLabel={`${t.title}, ${t.artist}`} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 7, opacity: pressed ? 0.6 : blocked ? 0.62 : 1 })}>
+    <Pressable testID={testID} onPress={onPress} onLongPress={() => openSheet(t)} accessibilityRole="button" accessibilityLabel={`${t.title}, ${t.artist}`} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, opacity: pressed ? 0.6 : blocked ? 0.62 : 1 })}>
       {index !== undefined ? <T v="h3" c="faint" style={{ width: 26, textAlign: 'right' }}>{index}</T> : null}
       <Cover uri={t.coverUrl ?? src?.coverUrl} title={t.artist} size={54} />
       <View style={{ flex: 1, minWidth: 0 }}>
         <T v="title" numberOfLines={1} c={current ? 'accent' : 'text'}>{t.title}</T>
         <T v="small" c="muted" numberOfLines={1}>{t.artist}</T>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 1, alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 1, alignItems: 'center' }}>
           <T v="small" c="faint" numberOfLines={1} style={{ flexShrink: 1 }}>{src ? sourceName(src.source) : 'Нет источника'}{extra > 0 ? ` и ещё ${extra}` : ''}</T>
           {mark ? <T v="small" c={mark.tone} style={mark.text === 'E' ? { fontFamily: FONT.b7 } : undefined}>{mark.text}</T> : null}
           {blocked ? <T v="small" c="warn" numberOfLines={1} style={{ flexShrink: 1 }}>{AVAILABILITY_LABEL[src.availability]}</T> : null}
@@ -63,7 +63,7 @@ export function TrackRow({ t, onPress, note, index, right, testID }: { t: TrackV
         </View>
         {note ? <T v="small" c="muted" numberOfLines={2} style={{ marginTop: 1 }}>{note}</T> : null}
       </View>
-      {right ?? <IconBtn name="more" label={`Действия: ${t.title}`} size={20} color={c.muted} onPress={() => openSheet(t)} />}
+      {right ?? <View style={{ marginRight: -10 }}><IconBtn name="more" label={`Действия: ${t.title}`} size={20} color={c.muted} onPress={() => openSheet(t)} /></View>}
     </Pressable>
   );
 }

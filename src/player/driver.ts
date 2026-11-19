@@ -23,7 +23,12 @@ export function createDriver(): AudioDriver {
   void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix', allowsRecording: false, shouldRouteThroughEarpiece: false });
 
   function replace(tracks: DriverTrack[]) {
-    pl?.destroy();
+    if (pl) {
+      // destroy() на Android не останавливает звук: без этого старая очередь играла бы поверх новой.
+      pl.clear();
+      pl.destroy();
+      pl.release?.();
+    }
     const inst = createAudioPlaylist({ sources: tracks.map(src), updateInterval: 500, loop });
     inst.volume = volume;
     inst.addListener('playlistStatusUpdate', (s: AudioPlaylistStatus & { error?: { message?: string } | string }) => {

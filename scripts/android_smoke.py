@@ -221,7 +221,7 @@ def scenario():
     button = None
     for _ in range(3):
         tap(side_scroll_to("На телефоне", "Плейлисты"), "фильтр На телефоне")
-        button = wait("Найти на телефоне", 8)
+        button = wait("Найти файлы", 8)
         if button:
             break
     tap(button, "кнопка поиска файлов")
@@ -253,10 +253,17 @@ def scenario():
     ok, _ = wait_session(is_playing, 10)
     record("Кнопка воспроизведения работает", ok)
 
+    # Запуск нового трека, пока играет другой: старая очередь обязана замолчать.
     shell(f"monkey -p {PACKAGE} -c android.intent.category.LAUNCHER 1", check=False)
     time.sleep(2)
-    shell("input keyevent KEYCODE_MEDIA_PAUSE")
-    time.sleep(1)
+    playing_now = next((s["title"] for s in sessions() if is_playing(s)), "")
+    target = FIRST if SECOND in playing_now else SECOND
+    tap(wait(target, 20, exact=False), "другой трек в списке")
+    ok, st = wait_session(lambda s: is_playing(s) and target in s["title"], 20)
+    time.sleep(2)
+    now_playing = [s for s in sessions() if is_playing(s)]
+    record("Новая очередь заменяет старую, звучит один трек", ok and len(now_playing) == 1, json.dumps(now_playing, ensure_ascii=False))
+
     tab = wait("Волна", 20)
     if tab:
         tap(tab)

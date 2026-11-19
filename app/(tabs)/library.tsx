@@ -58,7 +58,7 @@ export default function Library() {
         <Field placeholder="Поиск по коллекции" value={search} onChangeText={setSearch} />
         {tab === 'tracks' ? <><Shelf>{SORTS.map(([id, l]) => <Chip key={id} label={l} on={sort === id} onPress={() => setSort(id)} />)}</Shelf><View style={{ height: 8 }} /></> : null}
         {tab === 'local' ? <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
-          <Btn label={scan ?? 'Найти на телефоне'} busy={!!scan} onPress={() => void runScan()} style={{ flex: 1 }} />
+          <Btn label={scan ?? 'Найти файлы'} busy={!!scan} onPress={() => void runScan()} style={{ flex: 1 }} />
           <Btn label="Добавить файлы" kind="line" style={{ flex: 1 }} onPress={async () => { try { const n = await pickAudioFiles(); if (n) { bumpData(); toast(`Добавлено файлов: ${n}`); } } catch (e) { toast((e as Error).message); } }} />
         </View> : null}
       </> : null}
