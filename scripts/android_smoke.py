@@ -355,7 +355,7 @@ def catalog_checks():
         record("SoundCloud по ссылке распознаётся", row, required=False)
         if row:
             tap(row)
-            embed = wait("В России нужен VPN", 20, exact=False)
+            embed = wait("плеер SoundCloud", 20, exact=False)
             time.sleep(15)
             screenshot("09-embed")
             record("Открывается встроенный плеер SoundCloud", embed, required=False)
