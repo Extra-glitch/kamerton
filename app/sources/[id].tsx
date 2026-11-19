@@ -6,6 +6,7 @@ import { friendlyError } from '@/net/http';
 import { spotifyLogin } from '@/platform/oauth';
 import { sourceContext as ctx } from '@/platform/secureConfig';
 import { adapter, playbackLabel, STATE_LABEL } from '@/sources/registry';
+import { refreshYouTubeReady } from '@/services/fullVersion';
 import { bumpData, toast } from '@/state/app';
 import { Btn, Field, Notice, Screen, T } from '@/ui/kit';
 
@@ -29,7 +30,7 @@ export default function SourceDetail() {
   const save = async () => { const clean: Record<string, string> = {}; for (const f of a.configFields ?? []) clean[f.key] = (values[f.key] ?? '').trim(); await ctx.setConfig(id, clean); };
   const check = async () => {
     setBusy(true); setResult(null);
-    try { await save(); const text = a.verify ? await a.verify(ctx) : 'Сохранено.'; setResult({ ok: true, text }); bumpData(); }
+    try { await save(); const text = a.verify ? await a.verify(ctx) : 'Сохранено.'; setResult({ ok: true, text }); bumpData(); void refreshYouTubeReady(); }
     catch (e) { setResult({ ok: false, text: friendlyError(e) }); } finally { setBusy(false); }
   };
   return (

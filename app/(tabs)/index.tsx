@@ -1,3 +1,4 @@
+import { useYouTubeReady } from '@/services/fullVersion';
 import { useQuery } from '@tanstack/react-query';
 import { Redirect, router, useIsFocused } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -15,7 +16,7 @@ import { Dial, playBadge, playOrOpen, PlayOrb, TrackList } from '@/ui/music';
 import { SPACE } from '@/ui/theme';
 
 function Poster({ t, tracks, i, context, size = 150 }: { t: TrackView; tracks: TrackView[]; i: number; context: string; size?: number }) {
-  const b = playBadge(t.preferred);
+  const b = playBadge(t.preferred, useYouTubeReady((y) => y.ready));
   return (
     <Press accessibilityRole="button" accessibilityLabel={`${t.title}, ${t.artist}`} onPress={() => playOrOpen(tracks, i, context)} style={{ width: size }}>
       <Cover uri={t.coverUrl} title={t.artist} size={size} radius={18} />

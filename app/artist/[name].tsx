@@ -9,7 +9,8 @@ import { normalizeText, primaryArtist } from '@/core/text';
 import * as repo from '@/db/repo';
 import { friendlyError } from '@/net/http';
 import { adapter, LISTEN_ELSEWHERE, playMode } from '@/sources/registry';
-import { artistPage } from '@/services/media';
+import { useYouTubeReady } from '@/services/fullVersion';
+import { artistCatalog, artistElsewhere } from '@/services/media';
 import { bumpData, toast, useUi } from '@/state/app';
 import { Ambient } from '@/ui/ambient';
 import { Btn, Chip, Cover, Empty, Loading, Notice, Press, RoundBtn, Section, Shelf, s as ks, T, useBottomPad } from '@/ui/kit';
@@ -31,21 +32,24 @@ export default function Artist() {
   const name = primaryArtist(p.name);
   const v = useUi((u) => u.dataVersion);
   const [more, setMore] = useState(false);
-  const q = useQuery({
-    queryKey: ['artist', name, p.deezer],
+  const yt = useYouTubeReady((y) => y.ready);
+  // Две части грузятся отдельно: каталог открывается сразу, медленные источники догружаются ниже.
+  const q = useQuery({ queryKey: ['artist', name, p.deezer], queryFn: () => artistCatalog(name, p.deezer) });
+  const extra = useQuery({
+    queryKey: ['artist-free', name],
     queryFn: async () => {
-      const page = await artistPage(name, p.deezer);
       const known = (await repo.getViews(await repo.tracksByArtistName(name))).filter((t) => t.preferred && playMode(t.preferred) === 'player');
-      const seen = new Set(page.free.map((t) => t.id));
-      return { ...page, free: [...known.filter((t) => !seen.has(t.id)), ...page.free] };
+      const more = await artistElsewhere(name);
+      const seen = new Set(known.map((t) => t.id));
+      return { ...more, free: [...known, ...more.free.filter((t) => !seen.has(t.id))] };
     },
   });
   const followed = useQuery({ queryKey: ['followed', name, v], queryFn: async () => (await repo.followedArtists()).some((a) => a.key === normalizeText(name)) });
-  const d = q.data;
+  const d = q.data ? { ...q.data, free: extra.data?.free ?? [], videos: extra.data?.videos ?? [], errors: [...q.data.errors, ...(extra.data?.errors ?? [])] } : undefined;
   const title = d?.ref?.name ?? name;
   const image = d?.ref?.imageUrl;
   const playAll = () => {
-    const list = d?.free.length ? d.free : d?.videos.length ? d.videos : d?.top ?? [];
+    const list = yt && d?.top.length ? d.top : d?.free.length ? d.free : d?.videos.length ? d.videos : d?.top ?? [];
     if (list.length) playOrOpen(list, 0, 'artist');
   };
   return (
@@ -62,7 +66,7 @@ export default function Artist() {
         </View>
         <View style={{ paddingHorizontal: SPACE.page }}>
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Btn label={d?.free.length || d?.videos.length ? 'Слушать' : 'Фрагменты'} icon="play" disabled={!d || (!d.free.length && !d.top.length && !d.videos.length)} onPress={playAll} style={{ flex: 1 }} />
+            <Btn label={yt || d?.free.length || d?.videos.length ? 'Слушать' : 'Фрагменты'} icon="play" disabled={!d || (!d.free.length && !d.top.length && !d.videos.length)} onPress={playAll} style={{ flex: 1 }} />
             <Btn label={followed.data ? 'Вы следите' : 'Следить'} icon={followed.data ? 'check' : 'plus'} kind="line" style={{ flex: 1 }} onPress={async () => { if (followed.data) await repo.unfollowArtist(name); else { await repo.followArtist(name); toast('Новые релизы появятся в подборке'); } bumpData(); }} />
           </View>
 
@@ -71,8 +75,7 @@ export default function Artist() {
           {d?.errors.map((e) => <Notice key={e} tone="warn" text={e} />)}
 
           {d?.videos.length ? <Section title="Слушать на YouTube" note="Целиком во встроенном плеере YouTube"><TrackList tracks={d.videos} context="artist" /></Section> : null}
-          {d?.free.length ? <Section title="Целиком в Камертоне" note="С телефона, вашего сервера и подключённых площадок"><TrackList tracks={d.free} context="artist" /></Section> : null}
-          {d?.top.length ? <Section title="Популярное" note="Фрагменты по 30 секунд из каталога Deezer">
+          {d?.top.length ? <Section title="Популярное" note={yt ? 'Играет целиком через YouTube' : 'Фрагменты по 30 секунд. Подключите YouTube, чтобы слушать целиком.'}>
             <TrackList tracks={more ? d.top : d.top.slice(0, 10)} context="artist" numbered />
             {!more && d.top.length > 10 ? <Btn label={`Ещё ${d.top.length - 10}`} kind="line" onPress={() => setMore(true)} style={{ marginTop: 8 }} /> : null}
           </Section> : null}
@@ -86,6 +89,7 @@ export default function Artist() {
             <T v="small" c="faint">Открыть {title} в:</T>
             {LISTEN_ELSEWHERE.map((id) => adapter(id)).filter((a) => a?.externalUrl).map((a) => <Chip key={a!.id} label={a!.name} onPress={() => { const u = a!.externalUrl!({ title: '', artist: title }); if (u) void Linking.openURL(u); }} />)}
           </View>
+          {d?.free.length ? <Section title="Целиком в Камертоне" note="С телефона, вашего сервера и подключённых площадок"><TrackList tracks={d.free} context="artist" /></Section> : null}
           {d && !d.free.length && !d.top.length && !d.videos.length ? <Empty title="Ничего не нашлось" text="Каталог и подключённые источники не знают этого исполнителя. Проверьте написание имени." /> : null}
         </View>
       </ScrollView>

@@ -16,6 +16,8 @@ export interface Settings {
   coverColors: boolean;
   /** Фоновые анимации. Системная настройка «Уменьшить движение» учитывается всегда. */
   animations: boolean;
+  /** Настоящее размытие под нижней панелью. Красиво, но на многих телефонах замедляет прокрутку. */
+  glassBlur: boolean;
   qualityWifi: QualityPreference;
   qualityCell: QualityPreference;
   fade: boolean;
@@ -32,7 +34,7 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
-  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true,
+  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true, glassBlur: false,
   qualityWifi: 'lossless', qualityCell: 'normal', fade: false, volume: 1, recordHistory: true, videoEnabled: true, lrclibEnabled: false,
   musicBrainzEnabled: true, listenBrainzEnabled: true, dailyNotification: false, seedTags: [], seedArtists: [], sourcePriority: DEFAULT_PRIORITY,
 };

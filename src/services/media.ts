@@ -108,47 +108,51 @@ export async function searchLink(url: string): Promise<{ title: string; tracks: 
 export interface ArtistPage { ref: ArtistRef | null; top: TrackView[]; albums: AlbumRef[]; free: TrackView[]; videos: TrackView[]; errors: string[] }
 
 /** Страница исполнителя: популярное и альбомы из каталога, плюс то, что играет целиком. */
-export async function artistPage(name: string, deezerId?: string): Promise<ArtistPage> {
-  const out: ArtistPage = { ref: null, top: [], albums: [], free: [], videos: [], errors: [] };
+/** Не ждём медленный источник дольше этого: страница должна открываться быстро. */
+const within = <T,>(p: Promise<T>, ms: number): Promise<T> => Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error('не ответил вовремя')), ms))]);
+
+/** Каталог исполнителя: фото, популярное, альбомы. Быстрая часть страницы. */
+export async function artistCatalog(name: string, deezerId?: string): Promise<Pick<ArtistPage, 'ref' | 'top' | 'albums' | 'errors'>> {
+  const out: Pick<ArtistPage, 'ref' | 'top' | 'albums' | 'errors'> = { ref: null, top: [], albums: [], errors: [] };
   const dz = adapter('deezer');
-  if (dz && (await dz.status(ctx)).state === 'ready') {
-    try {
-      let id = deezerId;
-      if (!id) {
-        const r = await dz.search!(ctx, name, 5);
-        const hit = r.artists.find((a) => isArtistMatch(name, a.name)) ?? r.artists.find((a) => similarity(primaryArtist(name), a.name) >= 0.92);
-        if (hit) { out.ref = hit; id = hit.id; }
-      }
-      if (id) {
-        const [top, albums, info] = await Promise.all([dz.artistTracks!(ctx, id), dz.artistAlbums!(ctx, id).catch(() => []), out.ref ? null : deezerArtist(id).catch(() => null)]);
-        if (info) out.ref = info;
-        out.top = await repo.getViews(await upsertFrom(dz, top));
-        out.albums = albums;
-        out.ref ??= { source: 'deezer', id, name, imageUrl: undefined };
-      }
-    } catch (e) { out.errors.push(`Deezer: ${friendlyError(e)}`); }
-  }
-  // Полные треки этого исполнителя из свободных источников и с телефона.
+  if (!dz || (await dz.status(ctx)).state !== 'ready') return out;
+  try {
+    let id = deezerId;
+    if (!id) {
+      const r = await dz.search!(ctx, name, 5);
+      const hit = r.artists.find((a) => isArtistMatch(name, a.name)) ?? r.artists.find((a) => similarity(primaryArtist(name), a.name) >= 0.92);
+      if (hit) { out.ref = hit; id = hit.id; }
+    }
+    if (id) {
+      const [top, albums, info] = await Promise.all([dz.artistTracks!(ctx, id), dz.artistAlbums!(ctx, id).catch(() => []), out.ref ? null : deezerArtist(id).catch(() => null)]);
+      if (info) out.ref = info;
+      out.top = await repo.getViews(await upsertFrom(dz, top));
+      out.albums = albums;
+      out.ref ??= { source: 'deezer', id, name, imageUrl: undefined };
+    }
+  } catch (e) { out.errors.push(`Deezer: ${friendlyError(e)}`); }
+  return out;
+}
+
+/** То, что играет целиком: файлы, свой сервер, свободные каталоги. Каждый источник ждём не дольше 6 секунд. */
+export async function artistElsewhere(name: string, exclude: Set<string> = new Set()): Promise<Pick<ArtistPage, 'free' | 'videos' | 'errors'>> {
+  const out: Pick<ArtistPage, 'free' | 'videos' | 'errors'> = { free: [], videos: [], errors: [] };
   const free = await searchable().then((l) => l.filter((a) => DIRECT_SOURCES.has(a.id) && a.id !== 'radio'));
-  const res = await Promise.allSettled(free.map((a) => a.search!(ctx, name, 20).then((r) => ({ a, r }))));
+  const res = await Promise.allSettled(free.map((a) => within(a.search!(ctx, name, 20), 6000).then((r) => ({ a, r }))));
   const ids: string[] = [];
   for (const x of res) {
     if (x.status !== 'fulfilled') continue;
     const mine = x.value.r.tracks.filter((t) => similarity(primaryArtist(t.artist), primaryArtist(name)) >= 0.92);
     ids.push(...(await upsertFrom(x.value.a, mine, { pool: true })));
   }
-  const topIds = new Set(out.top.map((t) => t.id));
-  out.free = (await repo.getViews(ids)).filter((t) => !topIds.has(t.id) && t.preferred && isPlayableHere(t.preferred));
-  // Целиком на YouTube: песни и клипы этого исполнителя.
-  const yt = adapter('youtube');
-  if (yt && (await yt.status(ctx)).state === 'ready') {
-    try {
-      const r = await cachedSearch(yt, primaryArtist(out.ref?.name ?? name), 20, 0);
-      const mine = r.tracks.filter((t) => similarity(primaryArtist(t.artist), primaryArtist(out.ref?.name ?? name)) >= 0.88);
-      out.videos = await repo.getViews(await upsertFrom(yt, mine));
-    } catch (e) { out.errors.push(`YouTube: ${friendlyError(e)}`); }
-  }
+  out.free = (await repo.getViews(ids)).filter((t) => !exclude.has(t.id) && t.preferred && isPlayableHere(t.preferred));
   return out;
+}
+
+export async function artistPage(name: string, deezerId?: string): Promise<ArtistPage> {
+  const cat = await artistCatalog(name, deezerId);
+  const more = await artistElsewhere(cat.ref?.name ?? name, new Set(cat.top.map((t) => t.id)));
+  return { ref: cat.ref, top: cat.top, albums: cat.albums, free: more.free, videos: more.videos, errors: [...cat.errors, ...more.errors] };
 }
 
 export async function radioResults(q: string): Promise<TrackView[]> {

@@ -15,9 +15,12 @@ import { BOTTOM_PAD, RADIUS, SPACE, TYPE, useColors, type TypeName } from './the
 
 type Tone = 'text' | 'muted' | 'faint' | 'accent' | 'warn' | 'danger' | 'onAccent' | 'ok';
 
+// Крупный системный шрифт не должен выталкивать текст за край: заголовки растут не больше чем на 15 %, текст — на 30 %.
+const SCALE_CAP: Partial<Record<TypeName, number>> = { poster: 1.1, h1: 1.15, h2: 1.2, h3: 1.25 };
+
 export function T({ v = 'body', c, style, ...rest }: TextProps & { v?: TypeName; c?: Tone }) {
   const col = useColors();
-  return <Text {...rest} style={[TYPE[v], { color: col[c ?? 'text'] }, style as StyleProp<TextStyle>]} />;
+  return <Text maxFontSizeMultiplier={SCALE_CAP[v] ?? 1.3} {...rest} style={[TYPE[v], { color: col[c ?? 'text'] }, style as StyleProp<TextStyle>]} />;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -87,7 +90,7 @@ export function Btn({ label, onPress, kind = 'solid', icon, disabled, busy, styl
   const inner = (
     <>
       {busy ? <ActivityIndicator size="small" color={fg} /> : icon ? <Icon name={icon} size={20} color={fg} /> : null}
-      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[TYPE.strong, { color: fg, fontFamily: 'Body-700', flexShrink: 1 }]}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.2} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[TYPE.strong, { color: fg, fontFamily: 'Body-700', flexShrink: 1 }]}>{label}</Text>
     </>
   );
   return (
@@ -105,7 +108,7 @@ export function Chip({ label, on, onPress, testID, icon }: { label: string; on?:
     <Press testID={testID} accessibilityRole="button" accessibilityState={{ selected: !!on }} onPress={onPress} scaleTo={0.94}>
       <View style={[s.chip, { borderColor: on ? c.accent : c.stroke, backgroundColor: on ? c.accent : c.glass }]}>
         {icon ? <Icon name={icon} size={16} color={on ? c.onAccent : c.text} /> : null}
-        <Text style={[TYPE.strong, { color: on ? c.onAccent : c.text }]}>{label}</Text>
+        <Text maxFontSizeMultiplier={1.2} numberOfLines={1} style={[TYPE.strong, { color: on ? c.onAccent : c.text }]}>{label}</Text>
       </View>
     </Press>
   );

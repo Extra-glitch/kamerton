@@ -8,7 +8,8 @@ import { newQid, type QueueItem } from '@/player/queue';
 import { sourceContext } from '@/platform/secureConfig';
 import { adapter } from '@/sources/registry';
 import { setSubsonicDisplayConfig } from '@/sources/subsonic';
-import { onVideoStart, stopVideo, useVideo, videoPause } from '@/player/video';
+import { onVideoStart, setVideoResolver, stopVideo, useVideo, videoPause } from '@/player/video';
+import { findFullVersion, refreshYouTubeReady } from '@/services/fullVersion';
 import { previewIds, resolveStream, sourceCtx } from '@/services/media';
 import { invalidateReco, nextWave, radioBatch, surpriseMe } from '@/services/reco';
 import { artistKey } from '@/reco/engine';
@@ -84,6 +85,9 @@ export function boot(): Promise<void> {
     player.subscribe((s) => { usePlayer.setState(s); if (s.playing && useVideo.getState().playing) videoPause(); });
     // Видео YouTube и плеер Камертона не звучат одновременно.
     onVideoStart(() => player.pause());
+    // Песни из каталога могут играть целиком через YouTube, если он подключён.
+    setVideoResolver(findFullVersion);
+    void refreshYouTubeReady();
     const saved = await repo.kvGet<PersistedPlayer | null>('player', null);
     if (saved) await player.restore(saved).catch(() => undefined);
   })();

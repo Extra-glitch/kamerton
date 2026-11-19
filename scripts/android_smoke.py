@@ -116,14 +116,14 @@ def scroll_to(label, attempts=6):
     return None
 
 
-def scroll_to_part(label, attempts=4):
-    """Как scroll_to, но ищет часть подписи."""
+def scroll_to_part(label, attempts=5):
+    """Как scroll_to, но ищет часть подписи. Строка должна быть выше нижней панели, иначе нажатие попадёт в панель."""
     w, h = size()
     for _ in range(attempts):
-        n = find(screen(), label, exact=False)
+        n = next((x for x in screen() if label in (x["text"] + "|" + x["desc"]) and h * .15 < x["y"] < h * .62), None)
         if n:
             return n
-        shell(f"input swipe {w // 2} {int(h * .7)} {w // 2} {int(h * .35)} 350")
+        shell(f"input swipe {w // 2} {int(h * .6)} {w // 2} {int(h * .35)} 400")
         time.sleep(.8)
     return None
 
@@ -323,6 +323,7 @@ def catalog_checks():
     tap(tab)
     typed = type_into("Песня, исполнитель или ссылка", "Morgenshtern")
     artist = wait("Исполнитель", 60, exact=False) if typed else None
+    record("Подсказка «Слушать песни целиком» видна", find(screen(), "Подключить YouTube", exact=False), required=False)
     screenshot("07-search-catalog")
     record("Каталог находит российских исполнителей", artist, "", required=False)
     if not artist:

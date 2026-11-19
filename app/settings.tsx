@@ -40,6 +40,7 @@ export default function Settings() {
       <SwitchRow title="Только то, что можно слушать" sub="В поиске не показывать фрагменты и песни, которые играют только в других приложениях" value={s.fullOnly} onChange={(fullOnly) => s.set({ fullOnly })} />
       <Row title="Диагностика музыкальных источников" sub="Какие сервисы подключены и что они отвечают на поиск" onPress={() => router.push('/diagnostics')} />
       <SwitchRow title="Цвета обложки" sub="Фон и акцент приложения подстраиваются под играющий трек" value={s.coverColors} onChange={(coverColors) => s.set({ coverColors })} />
+      <SwitchRow title="Размытие под панелями" sub="Настоящее матовое стекло под нижней панелью. На многих телефонах замедляет прокрутку, поэтому выключено" value={s.glassBlur} onChange={(glassBlur) => s.set({ glassBlur })} />
       <SwitchRow title="Анимации" sub="Плавный фон и пульсация кнопки. Если в системе включено «Уменьшить движение», они отключаются сами" value={s.animations} onChange={(animations) => s.set({ animations })} />
 
       <H>Рекомендации и данные</H>

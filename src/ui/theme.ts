@@ -1,7 +1,7 @@
 import { useColorScheme } from 'react-native';
 import { create } from 'zustand';
 import { useSettings } from '@/state/settings';
-import { alpha, mix, readableOn, saturation, textOn } from './color';
+import { alpha, luminance, mix, readableOn, saturation, textOn } from './color';
 
 // «Резонанс»: ночной фиолетовый фон, стеклянные панели и цвет, который приходит с обложки
 // играющего трека. Когда ничего не играет, фон держит собственная пионово-сиреневая гамма.
@@ -47,7 +47,8 @@ export function tinted(base: Colors, colors: string[] | null): Colors {
   if (hit) return hit;
   const vivid = [...colors].sort((a, b) => saturation(b) - saturation(a))[0];
   let out: Colors = { ...base, ambient: colors.slice(0, 3).map((c) => (isLight(base) ? mix(c, '#ffffff', 0.45) : mix(c, '#000000', 0.15))) };
-  if (saturation(vivid) > 0.28) {
+  // Серые и блёклые обложки не меняют акцент: иначе кнопки становятся тусклыми и плохо видны.
+  if (saturation(vivid) > 0.45 && luminance(vivid) > 0.04) {
     const accent = readableOn(isLight(base) ? mix(vivid, '#000000', 0.2) : mix(vivid, '#ffffff', 0.25), base.bg, 4.5);
     out = { ...out, accent, onAccent: textOn(accent), accentSoft: alpha(accent, isLight(base) ? 0.12 : 0.16) };
   }

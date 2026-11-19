@@ -49,7 +49,7 @@ export interface HttpOptions {
 
 async function once(url: string, o: HttpOptions): Promise<Response> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), o.timeoutMs ?? 15000);
+  const timer = setTimeout(() => ctrl.abort(), o.timeoutMs ?? 10000);
   const service = o.service ?? 'Сервис';
   try {
     const res = await fetch(url, {
@@ -82,7 +82,8 @@ export async function httpResponse(url: string, o: HttpOptions = {}): Promise<Re
     } catch (e) {
       last = e;
       const kind = (e as HttpError).kind;
-      const retriable = kind === 'server' || kind === 'timeout' || kind === 'rate_limit' || kind === 'offline';
+      // Тайм-аут не повторяем: иначе медленный сервис держит экран вдвое дольше.
+      const retriable = kind === 'server' || kind === 'rate_limit' || kind === 'offline';
       if (!retriable || i === attempts - 1) break;
       await delay(Math.min(((e as HttpError).retryAfterSec ?? 0) * 1000 || 400 * 2 ** i, 5000));
     }

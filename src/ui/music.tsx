@@ -49,7 +49,8 @@ export function versionMark(s: SourceTrack): { text: string; tone: 'muted' | 'wa
 }
 
 export { playBadge } from './musicBadge';
-import { playBadge } from './musicBadge';
+import { canPlayViaYouTube, playBadge } from './musicBadge';
+import { useYouTubeReady } from '@/services/fullVersion';
 
 /** Три полоски «сейчас играет». Без постоянной анимации: она мешала прокрутке списков. */
 export function Bars({ playing, color, size = 14 }: { playing: boolean; color: string; size?: number }) {
@@ -59,10 +60,15 @@ export function Bars({ playing, color, size = 14 }: { playing: boolean; color: s
 
 export function TrackRow({ t, onPress, note, index, right, testID, showSources }: { t: TrackView; onPress?: () => void; note?: string; index?: number; right?: React.ReactNode; testID?: string; showSources?: boolean }) {
   const c = useColors();
-  const current = usePlayer((p) => p.current?.id === t.id);
-  const playing = usePlayer((p) => p.current?.id === t.id && p.playing);
+  const audioCurrent = usePlayer((p) => p.current?.id === t.id);
+  const audioPlaying = usePlayer((p) => p.current?.id === t.id && p.playing);
+  const videoCurrent = useVideo((v) => v.active && v.queue[v.index]?.id === t.id);
+  const videoPlaying = useVideo((v) => v.active && v.queue[v.index]?.id === t.id && v.playing);
+  const current = audioCurrent || videoCurrent;
+  const playing = audioPlaying || videoPlaying;
+  const yt = useYouTubeReady((y) => y.ready);
   const src = t.preferred;
-  const badge = playBadge(src);
+  const badge = playBadge(src, yt);
   const state = src ? effectiveExplicit(src) : 'unknown';
   const tags = src ? parseTitle(src.title).versionTags : [];
   const dim = badge.tone === 'faint' && src?.availability !== 'region_blocked';
@@ -101,6 +107,12 @@ export function TrackList({ tracks, context, notes, numbered, showSources }: { t
 export function playOrOpen(tracks: TrackView[], i: number, context: string) {
   const t = tracks[i];
   const mode = t.preferred ? playMode(t.preferred) : 'none';
+  // YouTube подключён: песни из каталога играют целиком, видео для каждой ищется перед её началом.
+  if (mode !== 'player' && useYouTubeReady.getState().ready && canPlayViaYouTube(t.sources.find((x) => x.source === 'youtube') ?? t.preferred)) {
+    const list = tracks.filter((x) => (x.preferred ? playMode(x.preferred) : 'none') !== 'player' && canPlayViaYouTube(x.sources.find((y) => y.source === 'youtube') ?? x.preferred));
+    playVideos(list, list.indexOf(t));
+    return;
+  }
   if (mode === 'player' || mode === 'preview') {
     const same = tracks.filter((x) => x.preferred && playMode(x.preferred) === mode);
     void playTracks(same, same.indexOf(t), mode === 'preview' ? 'preview' : context);

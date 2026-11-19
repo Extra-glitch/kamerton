@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,7 +25,8 @@ import { Glass } from '@/ui/glass';
 import { Badge, Btn, Chip, Cover, Field, IconBtn, Notice, Press, RoundBtn, T } from '@/ui/kit';
 import { Dial, PlayOrb, qualityText } from '@/ui/music';
 import { SONG_TITLE, useColors } from '@/ui/theme';
-import { stopVideo, useVideo, videoJump, videoNext, videoPrev, videoSeek, videoToggle } from '@/player/video';
+import { playVideos, stopVideo, useVideo, videoJump, videoNext, videoPrev, videoSeek, videoToggle } from '@/player/video';
+import { useYouTubeReady } from '@/services/fullVersion';
 import { VIDEO_TOP } from '@/ui/video';
 
 const CONTEXT: [string, string][] = [['preview', 'Фрагменты'], ['wave', 'Волна'], ['surprise', 'Удиви меня'], ['radio:', 'Радио по песне'], ['daily', 'Открытия дня'], ['dj', 'Умный DJ'], ['search', 'Поиск'], ['library', 'Коллекция'], ['playlist', 'Плейлист'], ['radio-station', 'Интернет-радио']];
@@ -65,7 +66,7 @@ function AudioPlayer() {
   const motion = useMotion();
   const coverScale = useSharedValue(1);
   const likeScale = useSharedValue(1);
-  useEffect(() => { coverScale.value = motion ? withSpring(playing || buffering ? 1 : 0.86, { damping: 16, stiffness: 140 }) : 1; }, [playing, buffering, motion, coverScale]);
+  useEffect(() => { coverScale.value = motion ? withTiming(playing || buffering ? 1 : 0.92, { duration: 220 }) : 1; }, [playing, buffering, motion, coverScale]);
   useEffect(() => { const sub = AppState.addEventListener('change', (st) => { setActive(st === 'active'); }); return () => sub.remove(); }, []);
   useEffect(() => { setView('cover'); }, [t?.id]);
   const rec = useQuery({ queryKey: ['why', t?.id], queryFn: () => repo.lastRecommendation(t!.id), enabled: !!t });
@@ -84,6 +85,7 @@ function AudioPlayer() {
   if (!t) return <View style={{ flex: 1, backgroundColor: c.bg, padding: 24, paddingTop: insets.top + 24 }}><Ambient /><T v="h1">Ничего не играет</T><Btn label="Закрыть" kind="line" onPress={() => router.back()} style={{ marginTop: 16 }} /></View>;
   const art = displayCover(t.coverUrl ?? src?.coverUrl);
   const preview = src ? playMode(src) === 'preview' : false;
+  const yt = useYouTubeReady.getState().ready;
   const live = !!src?.isLive;
   const state = src ? effectiveExplicit(src) : 'unknown';
   const tags = parseTitle(t.title).versionTags.filter((v) => v !== 'explicit_marked');
@@ -136,7 +138,9 @@ function AudioPlayer() {
           <T v="small" c={state === 'clean' || tags.includes('radio_edit') ? 'warn' : state === 'unknown' ? 'faint' : 'muted'}>{explicitLabel(state, tags)}{tags.filter((x) => x !== 'clean' && x !== 'radio_edit').length ? `, ${tags.filter((x) => x !== 'clean' && x !== 'radio_edit').map(versionLabel).join(', ').toLowerCase()}` : ''}</T>
           {src?.attribution ? <T v="small" c="faint">{src.attribution}</T> : null}
           {preview ? <Glass radius={18} style={{ padding: 12, marginTop: 10 }}>
-            <T v="small" c="muted">Это фрагмент. Полностью песню можно послушать по подписке:</T>
+            {yt ? <Btn testID="play-full-youtube" label="Слушать целиком (YouTube)" icon="play" onPress={() => playVideos([t], 0)} style={{ marginBottom: 10 }} />
+              : <Btn label="Подключить YouTube, чтобы слушать целиком" kind="line" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginBottom: 10 }} />}
+            <T v="small" c="muted">Это фрагмент. Ещё полную песню можно открыть в приложении сервиса:</T>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
               {LISTEN_ELSEWHERE.map((id) => adapter(id)).filter((a) => a?.externalUrl).map((a) => <Chip key={a!.id} icon="link" label={a!.name} onPress={() => { player.pause(); void Linking.openURL(a!.externalUrl!({ title: t.title, artist: t.artist })!); }} />)}
             </View>
@@ -208,6 +212,7 @@ function VideoPlayer() {
   const pos = useVideo((v) => v.positionSec);
   const dur = useVideo((v) => v.durationSec);
   const error = useVideo((v) => v.error);
+  const resolving = useVideo((v) => v.resolving);
   const [seekShown, setSeekShown] = useState<number | null>(null);
   if (!t) return null;
   const h = Math.round((width - 32) * 9 / 16);
@@ -219,6 +224,11 @@ function VideoPlayer() {
         <RoundBtn testID="player-close" name="down" label="Свернуть плеер" onPress={() => router.back()} />
         <T v="strong" c="muted" style={{ flex: 1, textAlign: 'center' }} numberOfLines={1}>YouTube</T>
         <RoundBtn name="more" label="Действия с треком" onPress={() => openSheet(t)} />
+      </View>
+      {/* Под видео: пока ищется полная версия песни, здесь видна обложка. */}
+      <View style={{ position: 'absolute', top: insets.top + VIDEO_TOP, left: 16, width: width - 32, height: h, borderRadius: 18, overflow: 'hidden', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <Cover uri={t.coverUrl} title={t.artist} size={h} radius={0} style={{ position: 'absolute', left: (width - 32 - h) / 2, opacity: 0.5 }} />
+        {resolving ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 }}><ActivityIndicator color="#fff" /><T v="small" style={{ color: '#fff' }}>Ищем полную версию на YouTube…</T></View> : null}
       </View>
       <ScrollView style={{ marginTop: insets.top + VIDEO_TOP + h + 8 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 30 }}>
         <Pressable onPress={() => router.push({ pathname: '/artist/[name]', params: { name: t.artist } })} accessibilityRole="link" style={{ marginTop: 10 }}>

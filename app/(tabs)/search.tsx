@@ -9,6 +9,7 @@ import * as repo from '@/db/repo';
 import { friendlyError } from '@/net/http';
 import { loadMore, runSearch, STATE_TEXT, useSearch, type ProviderRun, type SearchGroup } from '@/search/engine';
 import { adapter, LISTEN_ELSEWHERE, playMode, sourceName } from '@/sources/registry';
+import { useYouTubeReady } from '@/services/fullVersion';
 import { isLink, searchLink } from '@/services/media';
 import { bumpData, toast } from '@/state/app';
 import { useSettings } from '@/state/settings';
@@ -17,6 +18,7 @@ import { Glass } from '@/ui/glass';
 import { Icon } from '@/ui/icons';
 import { Btn, Chip, Cover, Empty, Field, Loading, Notice, Press, Section, Shelf, s as ks, T, useBottomPad } from '@/ui/kit';
 import { TrackList } from '@/ui/music';
+import { canPlayViaYouTube } from '@/ui/musicBadge';
 import { SPACE, TYPE, useColors } from '@/ui/theme';
 
 type Version = 'all' | 'original' | 'clean';
@@ -37,6 +39,17 @@ function ProviderPill({ r, on, onPress }: { r: ProviderRun; on: boolean; onPress
   );
 }
 
+/** Главное, что нужно для прослушивания целиком: подключить YouTube. */
+function FullListeningCard() {
+  return (
+    <Glass style={{ padding: 16, marginTop: 10 }} testID="connect-youtube-card">
+      <T v="h3">Слушать песни целиком</T>
+      <T v="small" c="muted" style={{ marginTop: 4 }}>Сейчас песни из каталога звучат фрагментом 30 секунд. Подключите YouTube: это бесплатно и занимает около 5 минут. После этого найденные песни будут играть полностью.</T>
+      <Btn testID="connect-youtube" label="Подключить YouTube" icon="link" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
+    </Glass>
+  );
+}
+
 export default function Search() {
   const bottomPad = useBottomPad();
   const c = useColors();
@@ -50,6 +63,7 @@ export default function Search() {
   const [showLoose, setShowLoose] = useState(false);
   const [moreBusy, setMoreBusy] = useState(false);
   const fullOnly = useSettings((x) => x.fullOnly);
+  const yt = useYouTubeReady((y) => y.ready);
   const set = useSettings((x) => x.set);
   const s = useSearch();
   useEffect(() => { const t = setTimeout(() => setQ(text.trim()), 450); return () => clearTimeout(t); }, [text]);
@@ -65,12 +79,12 @@ export default function Search() {
     const p = t.preferred;
     if (!p) return false;
     if (only && !t.sources.some((x) => x.source === only)) return false;
-    if (fullOnly && playMode(p) !== 'player' && playMode(p) !== 'embed') return false;
+    if (fullOnly && playMode(p) !== 'player' && playMode(p) !== 'embed' && !(yt && canPlayViaYouTube(p))) return false;
     const st = effectiveExplicit(p);
     if (version === 'original' && st === 'clean') return false;
     if (version === 'clean' && st !== 'clean') return false;
     return true;
-  }), [active, s.tracks, only, fullOnly, version]);
+  }), [active, s.tracks, only, fullOnly, version, yt]);
   const top = active ? s.topArtist : null;
   const otherArtists = (active ? s.artists : []).filter((a) => a !== top).slice(0, 10);
   const pending = active && !s.done;
@@ -87,6 +101,7 @@ export default function Search() {
         <Field testID="search-input" icon="search" placeholder="Песня, исполнитель или ссылка" value={text} onChangeText={setText} returnKeyType="search" autoCorrect={false} autoCapitalize="none" />
         <View style={[ks.wrap, { marginTop: -4, marginBottom: 6 }]}>{GROUPS.map(([g, label]) => <Chip key={g} label={label} on={group === g} onPress={() => setGroup(g)} />)}</View>
 
+        {!yt && group === 'songs' ? <FullListeningCard /> : null}
         {q.length < 2 ? <>
           <T v="h3" style={{ marginBottom: 10, marginTop: 14 }}>Жанры</T>
           <View style={ks.wrap}>{GENRES.map(([id, label]) => <Chip key={id} label={label} onPress={() => setText(id)} />)}</View>
@@ -110,8 +125,8 @@ export default function Search() {
 
         {!link && q.length >= 2 ? <View testID="search-results">
           {active && s.runs.length ? <View style={{ marginTop: 8 }}>
-            <Shelf>{s.runs.map((r) => <ProviderPill key={r.id} r={r} on={only === r.id} onPress={() => (r.state === 'needs_setup' ? router.push({ pathname: '/sources/[id]', params: { id: r.id } }) : setOnly(only === r.id ? null : r.id))} />)}</Shelf>
-            {setup.length ? <T v="small" c="faint" style={{ marginTop: 6 }}>Не подключены: {setup.map((r) => r.name).join(', ')}. Нажмите на источник, чтобы подключить.</T> : null}
+            {/* Неподключённые источники здесь не показываем: их список есть в «Диагностике источников». */}
+            <Shelf>{s.runs.filter((r) => r.state !== 'needs_setup').map((r) => <ProviderPill key={r.id} r={r} on={only === r.id} onPress={() => setOnly(only === r.id ? null : r.id)} />)}</Shelf>
           </View> : null}
 
           {top && group === 'songs' ? <Press testID="top-artist" accessibilityRole="link" accessibilityLabel={`Открыть исполнителя: ${top.name}`} onPress={() => openArtist(top.name, top.source, top.id)} style={{ marginTop: 14 }}>

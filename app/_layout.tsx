@@ -53,7 +53,7 @@ export default function RootLayout() {
               <ArtworkTint />
               {/* Всё, что под стеклянными панелями, лежит внутри «источника размытия». */}
               <BlurTargetView ref={target} style={{ flex: 1, backgroundColor: c.bg }}>
-                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade_from_bottom' }}>
+                <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade', animationDuration: 180 }}>
                   <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
                   <Stack.Screen name="player" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
                   <Stack.Screen name="queue" options={{ animation: 'slide_from_bottom' }} />
