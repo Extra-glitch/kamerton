@@ -501,7 +501,7 @@ def type_into(field_label, text):
     tap(field)
     shell("input keycombination 113 29", check=False)
     shell("input keyevent 67", check=False)
-    shell(f"input text '{text}'")
+    shell(f"input text '{text.replace(' ', '%s')}'")  # пробел в «input text» передаётся как %s
     return True
 
 
