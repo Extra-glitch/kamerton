@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { VersionFilter } from '@/core/choose';
 import { kvGet, kvSet, setSourceChoice } from '@/db/repo';
-import { DEFAULT_PRIORITY, DIRECT_SOURCES } from '@/sources/registry';
+import { DEFAULT_PRIORITY, enabledDirect, setDisabledSources } from '@/sources/registry';
 import type { QualityPreference } from '@/sources/types';
 
 export interface Settings {
@@ -18,6 +18,10 @@ export interface Settings {
   animations: boolean;
   /** Настоящее размытие под нижней панелью. Красиво, но на многих телефонах замедляет прокрутку. */
   glassBlur: boolean;
+  /** Источники, которые пользователь выключил в «Диагностике источников»: они не ищут и не играют. */
+  disabledSources: string[];
+  /** Сам добавлять новую музыку, появившуюся в памяти телефона (например, сохранённую из Telegram). */
+  autoImport: boolean;
   qualityWifi: QualityPreference;
   qualityCell: QualityPreference;
   fade: boolean;
@@ -34,7 +38,7 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
-  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true, glassBlur: false,
+  onboarded: false, profileName: '', theme: 'dark', discovery: 0.5, versionFilter: 'original_first', fullOnly: false, coverColors: true, animations: true, glassBlur: false, disabledSources: [], autoImport: true,
   qualityWifi: 'lossless', qualityCell: 'normal', fade: false, volume: 1, recordHistory: true, videoEnabled: true, lrclibEnabled: false,
   musicBrainzEnabled: true, listenBrainzEnabled: true, dailyNotification: false, seedTags: [], seedArtists: [], sourcePriority: DEFAULT_PRIORITY,
 };
@@ -53,13 +57,15 @@ export const useSettings = create<Store>((set, get) => ({
   async load() {
     const saved = await kvGet<Partial<Settings>>('settings', {});
     const next = { ...DEFAULTS, ...saved };
-    setSourceChoice({ directSources: DIRECT_SOURCES, priority: next.sourcePriority, versionFilter: next.versionFilter });
+    setDisabledSources(next.disabledSources);
+    setSourceChoice({ directSources: enabledDirect(), priority: next.sourcePriority, versionFilter: next.versionFilter });
     set({ ...next, loaded: true });
   },
   set(patch) {
     set(patch);
     const s = pick(get());
-    setSourceChoice({ directSources: DIRECT_SOURCES, priority: s.sourcePriority, versionFilter: s.versionFilter });
+    setDisabledSources(s.disabledSources);
+    setSourceChoice({ directSources: enabledDirect(), priority: s.sourcePriority, versionFilter: s.versionFilter });
     void kvSet('settings', s);
   },
 }));

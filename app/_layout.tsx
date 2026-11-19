@@ -13,6 +13,7 @@ import { Ambient, ArtworkTint } from '@/ui/ambient';
 import { BlurTargetContext } from '@/ui/glass';
 import { Btn, T } from '@/ui/kit';
 import { Dock, OfflineBanner, Toast, TrackSheet } from '@/ui/music';
+import { ShareReceiver, ShareRoot } from '@/ui/ShareReceiver';
 import { useColors } from '@/ui/theme';
 import { VideoHost } from '@/ui/video';
 
@@ -37,6 +38,7 @@ export default function RootLayout() {
   useEffect(() => { if (shown) void SplashScreen.hideAsync().catch(() => undefined); }, [shown]);
   if (!shown) return <View style={{ flex: 1, backgroundColor: c.bg }} />;
   return (
+    <ShareRoot>
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: c.bg }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
@@ -51,6 +53,7 @@ export default function RootLayout() {
           ) : (
             <BlurTargetContext.Provider value={target}>
               <ArtworkTint />
+              <ShareReceiver />
               {/* Всё, что под стеклянными панелями, лежит внутри «источника размытия». */}
               <BlurTargetView ref={target} style={{ flex: 1, backgroundColor: c.bg }}>
                 <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade', animationDuration: 180 }}>
@@ -71,5 +74,6 @@ export default function RootLayout() {
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+    </ShareRoot>
   );
 }

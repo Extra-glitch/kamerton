@@ -2,7 +2,7 @@
   "expo": {
     "name": "Камертон",
     "slug": "kamerton",
-    "version": "0.1.0",
+    "version": "0.4.0",
     "scheme": "kamerton",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -76,7 +76,20 @@
           }
         }
       ],
-      "./plugins/with-embedded-debug-bundle"
+      "./plugins/with-embedded-debug-bundle",
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": [
+            "audio/*",
+            "text/plain"
+          ],
+          "androidMultiIntentFilters": [
+            "audio/*"
+          ],
+          "disableIOS": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

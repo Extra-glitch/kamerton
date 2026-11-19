@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +61,9 @@ export default function Search() {
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
+  // Ссылка, присланная через «Поделиться» (например, из YouTube или SoundCloud), сразу ищется.
+  const shared = useLocalSearchParams<{ q?: string }>().q;
+  useEffect(() => { if (shared) setText(shared); }, [shared]);
   const [q, setQ] = useState('');
   const [group, setGroup] = useState<SearchGroup>('songs');
   const [only, setOnly] = useState<string | null>(null);

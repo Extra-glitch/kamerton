@@ -299,7 +299,23 @@ def scenario():
         shell("input keyevent KEYCODE_BACK")
         time.sleep(1)
     shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    share_check()
     catalog_checks()
+
+
+def share_check():
+    """Отправляет аудиофайл в Камертон так же, как Telegram через «Поделиться», и ждёт, что он заиграет."""
+    out = adb("shell", "content", "query", "--uri", "content://media/external/audio/media", "--projection", "_id:_display_name", check=False)
+    m = re.search(r"_id=(\d+), _display_name=kamerton-2\.mp3", out)
+    if not m:
+        record("Файл через «Поделиться» добавляется и играет", False, "файл не найден в медиатеке: " + out[-300:], required=False)
+        return
+    shell(f"am start -a android.intent.action.SEND -t audio/mpeg --eu android.intent.extra.STREAM content://media/external/audio/media/{m.group(1)} --grant-read-uri-permission -n app.kamerton.player/.MainActivity")
+    ok, st = wait_session(lambda s: is_playing(s) and SECOND in s.get("title", ""), 40)
+    screenshot("06b-shared")
+    record("Файл через «Поделиться» добавляется и играет", ok, json.dumps(st, ensure_ascii=False), required=False)
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    time.sleep(1)
 
 
 def type_into(field_label, text):

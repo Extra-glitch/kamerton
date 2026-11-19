@@ -43,3 +43,14 @@ describe.runIf(process.env.LIVE)('поиск на настоящих API', () =>
     expect(s.done).toBe(true);
   }, 60000);
 });
+
+describe.runIf(process.env.LIVE)('Openverse на настоящем API', () => {
+  it('находит свободную музыку с прямой ссылкой на файл', async () => {
+    const { openverse } = await import('@/sources/openverse');
+    const { memoryCtx } = await import('../helpers');
+    const r = await openverse.search!(memoryCtx(), 'lofi', 20);
+    console.log(`OPENVERSE «lofi» → ${r.tracks.length}: ${r.tracks.slice(0, 3).map((t) => `${t.artist} — ${t.title} [${t.attribution}] ${String(t.extra?.stream).slice(0, 60)}`).join('; ')}`);
+    expect(r.tracks.length).toBeGreaterThan(0);
+    expect(String(r.tracks[0].extra?.stream)).toMatch(/^https?:\/\//);
+  }, 60000);
+});

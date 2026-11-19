@@ -3,10 +3,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Switch, View } from 'react-native';
 import { sourceContext as ctx } from '@/platform/secureConfig';
-import { PROVIDERS, runSearch, STATE_TEXT, useSearch, useSearchLog, type ProviderRun, type SearchSnapshot } from '@/search/engine';
-import { adapter } from '@/sources/registry';
+import { runSearch, STATE_TEXT, useSearch, useSearchLog, type ProviderRun, type SearchSnapshot } from '@/search/engine';
+import { abilities, ADAPTERS, INTEGRATION_LABEL, integrationOf, type IntegrationKind } from '@/sources/registry';
+import { useSettings } from '@/state/settings';
 import { Glass } from '@/ui/glass';
 import { Badge, Btn, Field, Row, Screen, Section, T } from '@/ui/kit';
 import { useColors } from '@/ui/theme';
@@ -36,6 +37,29 @@ function RunCard({ r }: { r: ProviderRun }) {
   );
 }
 
+const ORDER: IntegrationKind[] = ['user-import', 'own-server', 'authorized-download', 'authorized-stream', 'official-api', 'external-player', 'catalog', 'official-sdk', 'external-app'];
+const ABILITY: [keyof ReturnType<typeof abilities>, string][] = [['search', 'поиск'], ['full', 'целиком'], ['background', 'в фоне'], ['offline', 'офлайн']];
+
+/** Источник: включатель, состояние подключения и что он умеет в Камертоне. */
+function SourceRow({ id, name, detail, ready, can, on, onToggle }: { id: string; name: string; detail?: string; ready: boolean; can: ReturnType<typeof abilities>; on: boolean; onToggle: (v: boolean) => void }) {
+  const c = useColors();
+  return (
+    <View style={{ paddingVertical: 9, opacity: on ? 1 : 0.55 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <T v="strong" onPress={() => router.push({ pathname: '/sources/[id]', params: { id } })}>{name}</T>
+          <T v="small" c="muted" numberOfLines={2}>{on ? detail : 'Выключен: не ищет и не играет'}</T>
+        </View>
+        {on ? <Badge label={ready ? 'подключён' : 'нужна настройка'} tone={ready ? 'ok' : 'faint'} /> : null}
+        <Switch testID={`toggle-${id}`} accessibilityLabel={`${name}: ${on ? 'включён' : 'выключен'}`} value={on} onValueChange={onToggle} trackColor={{ true: c.accent, false: c.line }} thumbColor={on ? c.onAccent : c.muted} />
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+        {ABILITY.map(([k, label]) => <Badge key={k} label={`${can[k] ? '✓' : '✕'} ${label}`} tone={can[k] ? 'ok' : 'faint'} />)}
+      </View>
+    </View>
+  );
+}
+
 function Snapshot({ s }: { s: SearchSnapshot }) {
   return (
     <Glass style={{ padding: 14, marginBottom: 10 }}>
@@ -52,21 +76,23 @@ export default function Diagnostics() {
   const [busy, setBusy] = useState(false);
   const live = useSearch();
   const log = useSearchLog((l) => l.items);
+  const disabled = useSettings((x) => x.disabledSources);
+  const setS = useSettings((x) => x.set);
+  const toggle = (id: string, on: boolean) => setS({ disabledSources: on ? disabled.filter((x) => x !== id) : [...new Set([...disabled, id])] });
   const status = useQuery({
     queryKey: ['diagnostics-status'],
-    queryFn: async () => Promise.all(PROVIDERS.map(async (p) => {
-      const a = adapter(p.id);
-      const st = a ? await a.status(ctx).catch(() => ({ state: 'needs_setup' as const, detail: 'Ошибка проверки' })) : null;
-      return { p, a, st };
-    })),
+    queryFn: async () => Promise.all(ADAPTERS.map(async (a) => ({ a, st: await a.status(ctx).catch(() => ({ state: 'needs_setup' as const, detail: 'Ошибка проверки' })) }))),
   });
+  const groups = ORDER.map((k) => ({ k, items: (status.data ?? []).filter(({ a }) => integrationOf(a) === k) })).filter((g) => g.items.length);
   return (
     <Screen title="Диагностика источников" sub="Какие сервисы участвуют в поиске, что они ответили и почему песня могла не найтись.">
-      <Section title="Подключение">
-        {status.data?.map(({ p, a, st }) => a ? (
-          <Row key={p.id} title={a.name} sub={`${GROUP_NAME[p.group]}. ${st?.detail ?? ''}`} onPress={() => router.push({ pathname: '/sources/[id]', params: { id: p.id } })}
-            right={<Badge label={st?.state === 'ready' ? 'подключён' : 'нужна настройка'} tone={st?.state === 'ready' ? 'ok' : 'faint'} />} />
-        ) : null)}
+      <Section title="Источники" note="Выключенный источник не участвует в поиске, волне и воспроизведении. Нажмите на название, чтобы открыть настройки.">
+        {groups.map((g) => (
+          <Glass key={g.k} style={{ paddingHorizontal: 14, paddingVertical: 6, marginBottom: 10 }}>
+            <T v="h3" style={{ marginTop: 6 }}>{INTEGRATION_LABEL[g.k]}</T>
+            {g.items.map(({ a, st }) => <SourceRow key={a.id} id={a.id} name={a.name} detail={st.detail} ready={st.state === 'ready' || st.state === 'link_only'} can={abilities(a)} on={!disabled.includes(a.id)} onToggle={(v) => toggle(a.id, v)} />)}
+          </Glass>
+        ))}
       </Section>
 
       <Section title="Проверить поиск" note="Запрос уйдёт во все подключённые источники сразу. Результаты появятся здесь и на вкладке «Поиск».">

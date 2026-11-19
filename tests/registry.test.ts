@@ -10,7 +10,7 @@ import { memoryCtx } from './helpers';
 
 describe('честность источников', () => {
   it('в приложении играют только разрешённые источники', () => {
-    expect([...DIRECT_SOURCES].sort()).toEqual(['archive', 'audius', 'jamendo', 'local', 'radio', 'soundcloud', 'subsonic']);
+    expect([...DIRECT_SOURCES].sort()).toEqual(['archive', 'audius', 'jamendo', 'local', 'openverse', 'radio', 'soundcloud', 'subsonic']);
   });
   it.each(['yandex', 'vk', 'zvuk', 'youtube_music', 'bandcamp'])('%s только открывается по ссылке', async (id) => {
     const a = adapter(id)!;

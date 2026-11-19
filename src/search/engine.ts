@@ -13,7 +13,7 @@ import * as repo from '@/db/repo';
 import { musicBrainz } from '@/meta/musicbrainz';
 import { friendlyError, HttpError } from '@/net/http';
 import { sourceContext as ctx } from '@/platform/secureConfig';
-import { adapter, DIRECT_SOURCES, isPlayableHere } from '@/sources/registry';
+import { adapter, DIRECT_SOURCES, isDisabled, isPlayableHere } from '@/sources/registry';
 import type { AlbumRef, ArtistRef, MusicSourceAdapter, SearchOutcome } from '@/sources/types';
 import { settings } from '@/state/settings';
 import { searchScore } from './rank';
@@ -43,6 +43,7 @@ export const PROVIDERS: ProviderSpec[] = [
   { id: 'subsonic', group: 'songs', trusted: false, variants: 'all', pageSize: 30 },
   { id: 'audius', group: 'songs', trusted: false, variants: 'all', pageSize: 20 },
   { id: 'jamendo', group: 'songs', trusted: false, variants: 'all', pageSize: 20 },
+  { id: 'openverse', group: 'songs', trusted: false, variants: 'original', pageSize: 20 },
   { id: 'archive', group: 'archive', trusted: false, variants: 'all', pageSize: 20 },
   { id: 'radio', group: 'radio', trusted: false, variants: 'all', pageSize: 30 },
 ];
@@ -196,7 +197,8 @@ export async function runSearch(q: string, group: SearchGroup = 'songs'): Promis
   current = s;
   useSearch.setState({ ...empty(query, group), startedAt: Date.now(), done: false, variants: s.variants });
   if (!query) return;
-  const specs = PROVIDERS.filter((p) => p.group === group);
+  // Выключенные пользователем источники в поиске не участвуют совсем.
+  const specs = PROVIDERS.filter((p) => p.group === group && !isDisabled(p.id));
   const adapters = specs.map((p) => adapter(p.id)).filter((a): a is MusicSourceAdapter => !!a?.search);
   const statuses = await Promise.all(adapters.map((a) => a.status(ctx).catch(() => ({ state: 'needs_setup' as const, detail: 'Не удалось проверить подключение' }))));
   if (current?.token !== s.token) return;

@@ -9,13 +9,14 @@ import { primaryArtist, similarity, splitArtists } from '@/core/text';
 import type { RemoteTrack, TrackView } from '@/core/types';
 import * as repo from '@/db/repo';
 import { sourceContext as ctx } from '@/platform/secureConfig';
+import { isDisabled } from '@/sources/registry';
 import { searchYouTube, youtube } from '@/sources/youtube';
 
 /** Подключён ли YouTube. Экраны подписываются на это, чтобы показывать «YouTube» вместо «фрагмент». */
 export const useYouTubeReady = create<{ ready: boolean }>(() => ({ ready: false }));
 
 export async function refreshYouTubeReady(): Promise<boolean> {
-  const ready = (await youtube.status(ctx).catch(() => ({ state: 'error' }))).state === 'ready';
+  const ready = !isDisabled('youtube') && (await youtube.status(ctx).catch(() => ({ state: 'error' }))).state === 'ready';
   useYouTubeReady.setState({ ready });
   return ready;
 }

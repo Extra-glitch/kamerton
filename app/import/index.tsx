@@ -11,7 +11,8 @@ import { ADAPTERS, adapter } from '@/sources/registry';
 import { BIG_IMPORT, importTargets, linkImport, parseImportFile, remoteToItems, runMatching } from '@/services/media';
 import { bumpData, toast } from '@/state/app';
 import { Glass } from '@/ui/glass';
-import { Btn, Field, Notice, Press, Row, Screen, T } from '@/ui/kit';
+import { Btn, Field, Notice, Press, Row, Screen, SwitchRow, T } from '@/ui/kit';
+import { useSettings } from '@/state/settings';
 import { Dial } from '@/ui/music';
 import { useColors } from '@/ui/theme';
 
@@ -47,6 +48,8 @@ function YandexHelp() {
 }
 
 export default function ImportScreen() {
+  const autoImport = useSettings((x) => x.autoImport);
+  const setS = useSettings((x) => x.set);
   const p = useLocalSearchParams<{ source?: string }>();
   const [text, setText] = useState('');
   const [link, setLink] = useState('');
@@ -120,7 +123,13 @@ export default function ImportScreen() {
 
         <T v="h2" style={{ marginTop: 28, marginBottom: 2 }}>Свои файлы</T>
         <Row title="Найти музыку на телефоне" icon="search" onPress={guard(async () => { const n = await scanDevice(); bumpData(); toast(`Найдено файлов: ${n}`); })} />
-        <Row title="Выбрать аудиофайлы" icon="plus" onPress={guard(async () => { const n = await pickAudioFiles(); if (n) { bumpData(); toast(`Добавлено файлов: ${n}`); } })} />
+        <Row title="Выбрать аудиофайлы" sub="Через файловый менеджер Android, в том числе из папки Telegram" icon="plus" onPress={guard(async () => { const n = await pickAudioFiles(); if (n) { bumpData(); toast(`Добавлено файлов: ${n}`); } })} />
+        <Glass style={{ padding: 14, marginTop: 12 }}>
+          <T v="h3">Из Telegram и других приложений</T>
+          <T v="small" c="muted" style={{ marginTop: 4 }}>Откройте песню в Telegram, нажмите «⋮» → «Поделиться» → «Камертон». Песня добавится в коллекцию с тегами и обложкой и сразу заиграет. Можно выбрать сразу несколько песен.</T>
+          <T v="small" c="muted" style={{ marginTop: 6 }}>Если вместо этого нажать «Сохранить в музыку», Камертон сам найдёт новый файл, когда вы его откроете.</T>
+        </Glass>
+        <SwitchRow title="Добавлять новую музыку с телефона" sub="Песни, сохранённые в память телефона, появятся в коллекции сами. Голосовые сообщения и записи не добавляются" value={autoImport} onChange={(v) => setS({ autoImport: v })} />
       </>}
     </Screen>
   );

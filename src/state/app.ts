@@ -88,6 +88,8 @@ export function boot(): Promise<void> {
     // Песни из каталога могут играть целиком через YouTube, если он подключён.
     setVideoResolver(findFullVersion);
     void refreshYouTubeReady();
+    // Выключили или включили источник: пересчитываем, может ли каталог играть через YouTube.
+    useSettings.subscribe((n, o) => { if (n.disabledSources !== o.disabledSources) void refreshYouTubeReady(); });
     const saved = await repo.kvGet<PersistedPlayer | null>('player', null);
     if (saved) await player.restore(saved).catch(() => undefined);
   })();
