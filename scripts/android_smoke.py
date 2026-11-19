@@ -230,7 +230,8 @@ def scenario():
     record("Найден файл на устройстве, теги прочитаны", found)
     wait(SECOND, 20, exact=False)
     nodes = screen()
-    rows = [n for n in (find(nodes, FIRST), find(nodes, SECOND)) if n]
+    places = {FIRST: find(nodes, FIRST), SECOND: find(nodes, SECOND)}
+    rows = [n for n in places.values() if n]
     tap(min(rows, key=lambda n: n["y"]), "первый файл в списке")  # после него в очереди есть следующий трек
     ok, st = wait_session(is_playing)
     screenshot("04-playing")
@@ -258,11 +259,14 @@ def scenario():
     time.sleep(2)
     playing_now = next((s["title"] for s in sessions() if is_playing(s)), "")
     target = FIRST if SECOND in playing_now else SECOND
-    tap(wait(target, 20, exact=False), "другой трек в списке")
+    # Во время игры экран постоянно обновляется и снимок интерфейса недоступен, поэтому берём прежние координаты.
+    tap(places[target], "другой трек в списке")
     ok, st = wait_session(lambda s: is_playing(s) and target in s["title"], 20)
     time.sleep(2)
     now_playing = [s for s in sessions() if is_playing(s)]
     record("Новая очередь заменяет старую, звучит один трек", ok and len(now_playing) == 1, json.dumps(now_playing, ensure_ascii=False))
+    shell("input keyevent KEYCODE_MEDIA_PAUSE")
+    time.sleep(1)
 
     tab = wait("Волна", 20)
     if tab:
