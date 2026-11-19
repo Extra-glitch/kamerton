@@ -95,7 +95,7 @@ export const INTEGRATION_LABEL: Record<IntegrationKind, string> = {
 };
 
 const KIND: Record<string, IntegrationKind> = {
-  local: 'user-import', subsonic: 'own-server', audius: 'authorized-stream', jamendo: 'authorized-download', openverse: 'authorized-download',
+  local: 'user-import', subsonic: 'own-server', audius: 'authorized-stream', jamendo: 'authorized-stream', openverse: 'authorized-download',
   archive: 'authorized-download', radio: 'authorized-stream', deezer: 'catalog', itunes: 'catalog', youtube: 'external-player', soundcloud: 'official-api',
   spotify: 'official-api', apple: 'official-sdk',
 };

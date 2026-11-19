@@ -168,6 +168,9 @@ def flow(page, shot, tid, errors, requests):
         page.go_back(); page.wait_for_timeout(300)
         tid("tab-profile").click(); tid("open-portrait").wait_for(); page.wait_for_timeout(400); shot("13-profile"); tid("open-portrait").click(); page.get_by_text("Ваш звук").wait_for(timeout=8000); page.wait_for_timeout(400); shot("14-portrait"); page.go_back()
         tid("open-sources").click(); tid("source-yandex").wait_for(); shot("15-sources"); tid("source-yandex").click(); page.get_by_text("Официального публичного API нет", exact=False).wait_for(); shot("16-source-yandex"); page.go_back(); page.wait_for_timeout(300); page.go_back()
+        # Диагностика: выключатель источника меняет строку и возвращается обратно.
+        tid("open-diagnostics").click(); tid("toggle-openverse").wait_for(timeout=8000); tid("toggle-openverse").scroll_into_view_if_needed(); page.wait_for_timeout(300); shot("16b-diagnostics")
+        tid("toggle-openverse").click(); page.get_by_text("Выключен: не ищет и не играет").wait_for(timeout=4000); tid("toggle-openverse").click(); page.wait_for_timeout(300); page.go_back(); page.wait_for_timeout(300)
         tid("open-settings").click(); page.get_by_text("Светлая", exact=True).click(); page.wait_for_timeout(300); shot("17-settings-light"); page.go_back(); tid("tab-index").click(); page.wait_for_timeout(600); shot("18-home-light")
         assert pos is not None
         real = [e for e in errors if "Warning" not in e and "shadow" not in e.lower() and "pointerEvents" not in e]

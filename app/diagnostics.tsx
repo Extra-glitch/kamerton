@@ -45,15 +45,14 @@ function SourceRow({ id, name, detail, ready, can, on, onToggle }: { id: string;
   const c = useColors();
   return (
     <View style={{ paddingVertical: 9, opacity: on ? 1 : 0.55 }}>
+      {/* Название и выключатель в одной строке, пояснение — на всю ширину ниже, чтобы текст не сжимался в узкую колонку. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ flex: 1 }}>
-          <T v="strong" onPress={() => router.push({ pathname: '/sources/[id]', params: { id } })}>{name}</T>
-          <T v="small" c="muted" numberOfLines={2}>{on ? detail : 'Выключен: не ищет и не играет'}</T>
-        </View>
-        {on ? <Badge label={ready ? 'подключён' : 'нужна настройка'} tone={ready ? 'ok' : 'faint'} /> : null}
+        <T v="strong" style={{ flex: 1 }} numberOfLines={1} onPress={() => router.push({ pathname: '/sources/[id]', params: { id } })}>{name}</T>
         <Switch testID={`toggle-${id}`} accessibilityLabel={`${name}: ${on ? 'включён' : 'выключен'}`} value={on} onValueChange={onToggle} trackColor={{ true: c.accent, false: c.line }} thumbColor={on ? c.onAccent : c.muted} />
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+      <T v="small" c="muted" numberOfLines={2}>{on ? detail : 'Выключен: не ищет и не играет'}</T>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+        {on ? <Badge label={ready ? 'подключён' : 'нужна настройка'} tone={ready ? 'ok' : 'faint'} /> : null}
         {ABILITY.map(([k, label]) => <Badge key={k} label={`${can[k] ? '✓' : '✕'} ${label}`} tone={can[k] ? 'ok' : 'faint'} />)}
       </View>
     </View>
