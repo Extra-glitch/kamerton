@@ -47,11 +47,10 @@ function FullListeningCard() {
     <Press testID="connect-youtube" accessibilityRole="button" accessibilityLabel="Подключить YouTube, чтобы песни играли целиком" onPress={() => router.push({ pathname: '/sources/[id]', params: { id: 'youtube' } })} style={{ marginTop: 8 }}>
       <Glass radius={16} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14 }}>
         <View style={{ flex: 1 }}>
-          <T v="strong">Песни звучат фрагментом 30 секунд</T>
-          <T v="small" c="muted">Подключите YouTube (бесплатно), чтобы слушать целиком</T>
+          <T v="strong" numberOfLines={1}>Сейчас играют фрагменты</T>
+          <T v="small" c="muted" numberOfLines={2}>Подключите YouTube, и песни будут звучать целиком</T>
         </View>
-        <T v="strong" c="accent">Подключить</T>
-        <Icon name="forward" size={18} color={c.accent} />
+        <Icon name="forward" size={20} color={c.accent} />
       </Glass>
     </Press>
   );

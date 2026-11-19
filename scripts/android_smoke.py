@@ -355,6 +355,9 @@ def catalog_checks():
         row = wait(", SoundCloud", 40, exact=False)  # подпись строки трека: «Название, Автор, SoundCloud»
         record("SoundCloud по ссылке распознаётся", row, required=False)
         if row:
+            shell("input keyevent 66")  # спрятать клавиатуру, иначе нажатие попадёт в её подсказки
+            time.sleep(1)
+            row = scroll_to_part(", SoundCloud") or row
             tap(row)
             embed = wait("плеер SoundCloud", 20, exact=False)
             time.sleep(15)
