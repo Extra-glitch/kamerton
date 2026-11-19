@@ -35,7 +35,7 @@ describe.runIf(process.env.LIVE)('поиск на настоящих API', () =>
     await runSearch(q);
     const s = useSearch.getState();
     const hits = s.tracks.filter((t) => artist.test(t.artist) || artist.test(t.title));
-    const top = s.tracks.slice(0, 3).map((t) => `${t.artist} — ${t.title} (${playBadge(t.preferred)})`).join('; ');
+    const top = s.tracks.slice(0, 3).map((t) => `${t.artist} — ${t.title} (${playBadge(t.preferred).label})`).join('; ');
     const runs = s.runs.map((r) => `${r.name}: ${r.state}${r.state === 'ok' || r.state === 'empty' ? ` ${r.matched}/${r.received}` : ''}${r.error ? ` (${r.error})` : ''}`).join(', ');
     console.log(`ПОИСК «${q}» → треков ${s.tracks.length}, нужных ${hits.length}. Варианты: ${s.variants.join(' | ')}\n  Первые: ${top}\n  Источники: ${runs}`);
     report.push(`| ${q} | ${s.tracks.length} | ${hits.length} | ${top.replace(/\|/g, '/')} | ${runs.replace(/\|/g, '/')} |`);

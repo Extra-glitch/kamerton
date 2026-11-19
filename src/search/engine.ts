@@ -16,6 +16,7 @@ import { sourceContext as ctx } from '@/platform/secureConfig';
 import { adapter, DIRECT_SOURCES, isPlayableHere } from '@/sources/registry';
 import type { AlbumRef, ArtistRef, MusicSourceAdapter, SearchOutcome } from '@/sources/types';
 import { settings } from '@/state/settings';
+import { searchScore } from './rank';
 import { queryVariants } from './variants';
 
 export type SearchGroup = 'songs' | 'archive' | 'radio';
@@ -113,12 +114,7 @@ async function publish(s: Session, done = false) {
   const goodIds = [...s.good.keys()];
   const views = await repo.getViews(goodIds);
   if (current?.token !== s.token) return;
-  const score = (t: TrackView) => {
-    const r = bestRelevance(s.variants, t);
-    const tier = r >= 0.95 ? 3 : r >= RELEVANT ? 2 : r >= 0.7 ? 1 : 0;
-    const playable = t.preferred && isPlayableHere(t.preferred) ? 1 : 0;
-    return tier * 10 + playable * 2 + Math.min(2, new Set(t.sources.map((x) => x.source)).size - 1);
-  };
+  const score = (t: TrackView) => searchScore(s.variants, t);
   const seen = new Set<string>();
   const tracks = views.filter((v) => !v.preferred?.isLive || s.group === 'radio').filter((v) => !seen.has(v.id) && !!seen.add(v.id))
     .sort((a, b) => score(b) - score(a) || (s.order.get(a.id) ?? 0) - (s.order.get(b.id) ?? 0));
@@ -146,10 +142,12 @@ async function absorb(s: Session, a: MusicSourceAdapter, spec: ProviderSpec, lis
   const opts = { mlAllowed: a.capabilities.mlAllowed, pool: DIRECT_SOURCES.has(a.id) && spec.group === 'songs' };
   const ids = await repo.upsertMany(keep, opts);
   const looseIds = await repo.upsertMany(drop, { mlAllowed: a.capabilities.mlAllowed });
+  // Порядок внутри одинаковой оценки: как у источника, источники по приоритету из PROVIDERS.
+  const base = Math.max(0, PROVIDERS.indexOf(spec)) * 10_000 + run.received;
   ids.forEach((id, i) => {
     const r = bestRelevance(s.variants, keep[i]);
     s.good.set(id, Math.max(s.good.get(id) ?? 0, r));
-    if (!s.order.has(id)) s.order.set(id, s.order.size);
+    s.order.set(id, Math.min(s.order.get(id) ?? Infinity, base + i));
   });
   looseIds.forEach((id) => s.loose.add(id));
   run.ids.push(...ids);

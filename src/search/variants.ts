@@ -29,7 +29,12 @@ export function queryVariants(q: string, extra: string[] = []): string[] {
   if (!base) return [];
   const list = [base, ...extra];
   if (CYR.test(base)) list.push(transliterate(base));
-  else if (LAT.test(base) && base.length >= 3) list.push(latinToCyrillic(base));
+  else if (LAT.test(base) && base.length >= 3) {
+    // Обратная транслитерация полезна для имён вроде morgenshtern, но не для английских слов:
+    // берём её, только если она переводится обратно без потерь.
+    const cyr = latinToCyrillic(base);
+    if (transliterate(cyr) === normalizeText(base)) list.push(cyr);
+  }
   const seen = new Set<string>();
   return list.filter((v) => { const k = normalizeText(v); if (!k || seen.has(k)) return false; seen.add(k); return true; });
 }

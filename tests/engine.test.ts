@@ -116,3 +116,24 @@ describe('видео YouTube', () => {
     vi.useRealTimers();
   });
 });
+
+describe('порядок результатов', () => {
+  it('оригинал исполнителя выше перезаливов, каверов и ремиксов', async () => {
+    const { searchScore } = await import('@/search/rank');
+    const src = (source: string, availability = 'full') => [{ id: `${source}:1`, trackId: 't', source, sourceTrackId: '1', title: '', artist: '', availability, explicit: 'unknown', fetchedAt: 0 }] as never;
+    const orig = view('o', { title: 'Blinding Lights', artist: 'The Weeknd', sources: src('deezer', 'preview') });
+    orig.preferred = orig.sources[0];
+    const remix = view('r', { title: 'Blinding Lights - Zaza Remix', artist: 'zaza', sources: src('audius') });
+    remix.preferred = remix.sources[0];
+    const cover = view('c', { title: 'The Weeknd Blinding Lights - [COVER]', artist: 'DJ-M', sources: src('audius') });
+    cover.preferred = cover.sources[0];
+    const v = ['Blinding Lights'];
+    expect(searchScore(v, orig)).toBeGreaterThan(searchScore(v, remix));
+    expect(searchScore(v, orig)).toBeGreaterThan(searchScore(v, cover) + 20);
+    const reup = view('u', { title: 'MORGENSHTERN - B', artist: 'TAnO4Ek', sources: src('audius') });
+    reup.preferred = reup.sources[0];
+    const real = view('m', { title: 'АНТИДЕПРЕССАНТЫ', artist: 'Morgenshtern', sources: src('deezer', 'preview') });
+    real.preferred = real.sources[0];
+    expect(searchScore(['Моргенштерн', 'morgenshtern'], real)).toBeGreaterThan(searchScore(['Моргенштерн', 'morgenshtern'], reup));
+  });
+});
